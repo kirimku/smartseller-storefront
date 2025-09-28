@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import PWAInstallPrompt from "@/components/common/PWAInstallPrompt";
 import { TenantProvider, useTenant } from "@/contexts/TenantContext";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { TenantLoader, TenantError } from "@/components/common/TenantLoader";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
@@ -17,6 +18,7 @@ import RedeemPage from "./pages/RedeemPage";
 import RedemptionSuccess from "./pages/RedemptionSuccess";
 import Profile from "./pages/Profile";
 import MyOrders from "./pages/MyOrders";
+import Register from "./pages/Register";
 
 const queryClient = new QueryClient();
 
@@ -41,6 +43,7 @@ const TenantAwareApp = () => {
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<Index />} />
+        <Route path="/register" element={<Register />} />
         <Route path="/warranty" element={<Warranty />} />
         <Route path="/referral" element={<Referral />} />
         <Route path="/spin-win" element={<SpinWin />} />
@@ -62,10 +65,12 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <TenantProvider>
-        <Toaster />
-        <Sonner />
-        <PWAInstallPrompt />
-        <TenantAwareApp />
+        <AuthProvider>
+          <Toaster />
+          <Sonner />
+          <PWAInstallPrompt />
+          <TenantAwareApp />
+        </AuthProvider>
       </TenantProvider>
     </TooltipProvider>
   </QueryClientProvider>
