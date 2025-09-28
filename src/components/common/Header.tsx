@@ -15,13 +15,14 @@ import {
   User, 
   Settings, 
   LogOut, 
-  Crown, 
   Star, 
   Package,
   Gift,
   Bell,
   Menu
 } from "lucide-react";
+import { useTenant } from "@/contexts/TenantContext";
+import { useTenantFeatures } from "@/hooks/useTenantFeatures";
 import RexusLogo from "@/assets/Rexus_Logo.png";
 
 interface HeaderProps {
@@ -33,22 +34,19 @@ interface HeaderProps {
 export const Header = ({ title, showBackButton, onBack }: HeaderProps) => {
   const navigate = useNavigate();
   const [showMobileMenu, setShowMobileMenu] = useState(false);
+  const { tenant } = useTenant();
+  const { hasLoyaltyProgram } = useTenantFeatures();
 
   // Mock user data - in a real app, this would come from context/state
   const user = {
     name: "John Doe",
     email: "john.doe@email.com",
     avatar: "",
-    points: 15420,
-    isAdmin: true
+    points: 15420
   };
 
   const handleProfileClick = () => {
     navigate("/profile");
-  };
-
-  const handleAdminClick = () => {
-    navigate("/admin");
   };
 
   const handleLogout = () => {
@@ -90,13 +88,17 @@ export const Header = ({ title, showBackButton, onBack }: HeaderProps) => {
               onClick={() => navigate("/")}
             >
               <img
-                src={RexusLogo}
-                alt="Rexus"
+                src={tenant?.branding.logo.light || RexusLogo}
+                alt={tenant?.branding.storeName || "Store"}
                 className="h-8 w-auto"
               />
               <div className="hidden sm:flex flex-col">
-                <span className="font-semibold text-lg">Rexus</span>
-                <span className="text-xs text-muted-foreground">Gaming Rewards</span>
+                <span className="font-semibold text-lg">
+                  {tenant?.branding.storeName || "Store"}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                  {tenant?.branding.tagline || "Your Shopping Destination"}
+                </span>
               </div>
             </div>
           </div>
@@ -137,12 +139,6 @@ export const Header = ({ title, showBackButton, onBack }: HeaderProps) => {
                   <div className="flex flex-col space-y-1">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-medium leading-none">{user.name}</p>
-                      {user.isAdmin && (
-                        <Badge className="bg-purple-600 text-white text-xs">
-                          <Crown className="w-3 h-3 mr-1" />
-                          Admin
-                        </Badge>
-                      )}
                     </div>
                     <p className="text-xs leading-none text-muted-foreground">
                       {user.email}
@@ -172,25 +168,19 @@ export const Header = ({ title, showBackButton, onBack }: HeaderProps) => {
                   <span>Profile</span>
                 </DropdownMenuItem>
 
-                <DropdownMenuItem onClick={() => navigate("/loyalty-rewards")}>
-                  <Gift className="mr-2 h-4 w-4" />
-                  <span>Rewards</span>
-                </DropdownMenuItem>
+                {hasLoyaltyProgram && (
+                  <DropdownMenuItem onClick={() => navigate("/loyalty-rewards")}>
+                    <Gift className="mr-2 h-4 w-4" />
+                    <span>Rewards</span>
+                  </DropdownMenuItem>
+                )}
 
                 <DropdownMenuItem onClick={() => navigate("/my-orders")}>
                   <Package className="mr-2 h-4 w-4" />
                   <span>My Orders</span>
                 </DropdownMenuItem>
 
-                {user.isAdmin && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={handleAdminClick}>
-                      <Crown className="mr-2 h-4 w-4" />
-                      <span>Admin Panel</span>
-                    </DropdownMenuItem>
-                  </>
-                )}
+
 
                 <DropdownMenuSeparator />
 
@@ -221,17 +211,19 @@ export const Header = ({ title, showBackButton, onBack }: HeaderProps) => {
         {/* Mobile Menu */}
         {showMobileMenu && (
           <div className="md:hidden mt-4 pt-4 border-t space-y-2">
-            <Button 
-              variant="ghost" 
-              className="w-full justify-start"
-              onClick={() => {
-                navigate("/loyalty-rewards");
-                setShowMobileMenu(false);
-              }}
-            >
-              <Gift className="mr-2 h-4 w-4" />
-              Rewards
-            </Button>
+            {hasLoyaltyProgram && (
+              <Button 
+                variant="ghost" 
+                className="w-full justify-start"
+                onClick={() => {
+                  navigate("/loyalty-rewards");
+                  setShowMobileMenu(false);
+                }}
+              >
+                <Gift className="mr-2 h-4 w-4" />
+                Rewards
+              </Button>
+            )}
             <Button 
               variant="ghost" 
               className="w-full justify-start"
@@ -243,19 +235,7 @@ export const Header = ({ title, showBackButton, onBack }: HeaderProps) => {
               <Package className="mr-2 h-4 w-4" />
               My Orders
             </Button>
-            {user.isAdmin && (
-              <Button 
-                variant="ghost" 
-                className="w-full justify-start"
-                onClick={() => {
-                  handleAdminClick();
-                  setShowMobileMenu(false);
-                }}
-              >
-                <Crown className="mr-2 h-4 w-4" />
-                Admin Panel
-              </Button>
-            )}
+
           </div>
         )}
       </div>
