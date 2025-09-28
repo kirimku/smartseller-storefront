@@ -1,0 +1,32 @@
+{
+  "generatorName": "typescript-axios",
+  "inputSpec": "./openapi/auth-endpoints.yaml",
+  "outputDir": "./src/generated/api",
+  "additionalProperties": {
+    "npmName": "smartseller-api-client",
+    "npmVersion": "1.0.0",
+    "supportsES6": true,
+    "withInterfaces": true,
+    "useSingleRequestParameter": false,
+    "withSeparateModelsAndApi": true,
+    "modelPackage": "models",
+    "apiPackage": "apis",
+    "enumNameSuffix": "Enum",
+    "enumPropertyNaming": "camelCase",
+    "modelPropertyNaming": "camelCase",
+    "paramNaming": "camelCase",
+    "stringEnums": true,
+    "snapshot": false,
+    "nullSafeAdditionalProps": true
+  },
+  "typeMappings": {
+    "DateTime": "string",
+    "date": "string"
+  },
+  "importMappings": {},
+  "globalProperties": {
+    "models": "",
+    "apis": "",
+    "supportingFiles": ""
+  }
+}

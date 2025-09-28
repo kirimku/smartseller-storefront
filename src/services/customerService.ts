@@ -1,7 +1,16 @@
 /**
  * Customer Service - Handles customer authentication and profile management
+ * Updated to use generated OpenAPI client
  */
 
+import { apiClient as generatedApiClient } from '@/lib/apiClient';
+import type { 
+  LoginRequest as GeneratedLoginRequest,
+  LoginResponse as GeneratedLoginResponse,
+  ForgotPasswordRequest as GeneratedForgotPasswordRequest,
+  ResetPasswordRequest as GeneratedResetPasswordRequest,
+  UserDTO 
+} from '@/lib/apiClient';
 import { apiClient, ApiResponse, handleApiError } from '@/lib/api';
 
 // Customer Types
@@ -102,23 +111,79 @@ export interface ChangePasswordRequest {
 
 export class CustomerService {
   /**
-   * Login customer
+   * Convert UserDTO to Customer interface
+   */
+  private convertUserDtoToCustomer(userDto: UserDTO): Customer {
+    return {
+      id: userDto.id || '',
+      email: userDto.email || '',
+      firstName: userDto.firstName || '',
+      lastName: userDto.lastName || '',
+      phone: userDto.phone,
+      avatar: userDto.avatar,
+      emailVerified: userDto.emailVerified || false,
+      phoneVerified: userDto.phoneVerified || false,
+      createdAt: userDto.createdAt || '',
+      updatedAt: userDto.updatedAt || '',
+      // Default values for fields not in UserDTO
+      dateOfBirth: undefined,
+      gender: undefined,
+      addresses: [],
+      preferences: {
+        language: 'en',
+        currency: 'USD',
+        timezone: 'UTC',
+        emailNotifications: true,
+        smsNotifications: false,
+        marketingEmails: false,
+        orderUpdates: true,
+      },
+      loyaltyPoints: 0,
+      totalOrders: 0,
+      totalSpent: 0,
+    };
+  }
+
+  /**
+   * Convert GeneratedLoginResponse to AuthResponse
+   */
+  private convertLoginResponse(response: GeneratedLoginResponse): AuthResponse {
+    const userData = response.data;
+    if (!userData?.user || !userData?.access_token) {
+      throw new Error('Invalid login response format');
+    }
+
+    return {
+      customer: this.convertUserDtoToCustomer(userData.user),
+      token: userData.access_token,
+      refreshToken: userData.refresh_token || '',
+      expiresIn: userData.token_expiry ? new Date(userData.token_expiry).getTime() - Date.now() : 3600000, // Default 1 hour
+    };
+  }
+
+  /**
+   * Login customer using generated API client
    */
   async login(credentials: LoginRequest): Promise<AuthResponse> {
     try {
-      const response = await apiClient.post<AuthResponse>('/api/auth/login', credentials);
+      // Convert to generated API format
+      const loginRequest: GeneratedLoginRequest = {
+        email: credentials.email,
+        password: credentials.password,
+      };
+
+      const response = await generatedApiClient.login(loginRequest);
+      const authResponse = this.convertLoginResponse(response);
       
-      if (response.success && response.data) {
-        // Store auth token
-        apiClient.setAuthToken(response.data.token);
-        this.storeAuthData(response.data);
-        return response.data;
-      }
+      // Store auth token in both clients
+      apiClient.setAuthToken(authResponse.token);
+      generatedApiClient.setAccessToken(authResponse.token);
+      this.storeAuthData(authResponse);
       
-      throw new Error(response.error || 'Login failed');
+      return authResponse;
     } catch (error) {
       console.error('Login failed:', error);
-      throw handleApiError(error);
+      throw error instanceof Error ? error : new Error('Login failed');
     }
   }
 
@@ -187,34 +252,35 @@ export class CustomerService {
   }
 
   /**
-   * Request password reset
+   * Request password reset using generated API client
    */
   async requestPasswordReset(data: PasswordResetRequest): Promise<void> {
     try {
-      const response = await apiClient.post('/api/auth/password-reset', data);
+      const forgotPasswordRequest: GeneratedForgotPasswordRequest = {
+        email: data.email,
+      };
       
-      if (!response.success) {
-        throw new Error(response.error || 'Password reset request failed');
-      }
+      await generatedApiClient.forgotPassword(forgotPasswordRequest);
     } catch (error) {
       console.error('Password reset request failed:', error);
-      throw handleApiError(error);
+      throw error instanceof Error ? error : new Error('Password reset request failed');
     }
   }
 
   /**
-   * Confirm password reset
+   * Confirm password reset using generated API client
    */
   async confirmPasswordReset(data: PasswordResetConfirm): Promise<void> {
     try {
-      const response = await apiClient.post('/api/auth/password-reset/confirm', data);
+      const resetPasswordRequest: GeneratedResetPasswordRequest = {
+        token: data.token,
+        newPassword: data.newPassword,
+      };
       
-      if (!response.success) {
-        throw new Error(response.error || 'Password reset failed');
-      }
+      await generatedApiClient.resetPassword(resetPasswordRequest);
     } catch (error) {
       console.error('Password reset failed:', error);
-      throw handleApiError(error);
+      throw error instanceof Error ? error : new Error('Password reset failed');
     }
   }
 

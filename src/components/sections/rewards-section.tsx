@@ -2,6 +2,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Gift, Clock, Zap, Target } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 const rewards = [
   {
@@ -34,6 +35,12 @@ const rewards = [
 ];
 
 export const RewardsSection = () => {
+  const { isAuthenticated } = useAuth();
+
+  // Don't render rewards section for non-authenticated users
+  if (!isAuthenticated) {
+    return null;
+  }
   return (
     <div className="px-6 mt-8 pb-24">
       <div className="flex items-center justify-between mb-4">

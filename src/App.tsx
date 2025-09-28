@@ -19,6 +19,7 @@ import RedemptionSuccess from "./pages/RedemptionSuccess";
 import Profile from "./pages/Profile";
 import MyOrders from "./pages/MyOrders";
 import Register from "./pages/Register";
+import Login from "./pages/Login";
 
 const queryClient = new QueryClient();
 
@@ -44,6 +45,7 @@ const TenantAwareApp = () => {
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/login" element={<Login />} />
         <Route path="/warranty" element={<Warranty />} />
         <Route path="/referral" element={<Referral />} />
         <Route path="/spin-win" element={<SpinWin />} />

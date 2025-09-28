@@ -19,10 +19,12 @@ import {
   Package,
   Gift,
   Bell,
-  Menu
+  Menu,
+  UserPlus
 } from "lucide-react";
 import { useTenant } from "@/contexts/TenantContext";
 import { useTenantFeatures } from "@/hooks/useTenantFeatures";
+import { useAuth } from "@/contexts/AuthContext";
 import RexusLogo from "@/assets/Rexus_Logo.png";
 
 interface HeaderProps {
@@ -36,23 +38,19 @@ export const Header = ({ title, showBackButton, onBack }: HeaderProps) => {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const { tenant } = useTenant();
   const { hasLoyaltyProgram } = useTenantFeatures();
-
-  // Mock user data - in a real app, this would come from context/state
-  const user = {
-    name: "John Doe",
-    email: "john.doe@email.com",
-    avatar: "",
-    points: 15420
-  };
+  const { customer, isAuthenticated, logout } = useAuth();
 
   const handleProfileClick = () => {
     navigate("/profile");
   };
 
-  const handleLogout = () => {
-    // Logout logic
-    console.log("Logging out...");
-    // navigate("/login");
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate("/");
+    } catch (error) {
+      console.error("Logout failed:", error);
+    }
   };
 
   return (
@@ -108,58 +106,64 @@ export const Header = ({ title, showBackButton, onBack }: HeaderProps) => {
             <h1 className="text-lg font-semibold hidden md:block">{title}</h1>
           )}
 
-          {/* Right side - User Menu */}
+          {/* Right side - Auth Menu */}
           <div className="flex items-center gap-4">
-            {/* Points Display */}
-            <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-purple-100 text-purple-700 rounded-full">
-              <Star className="w-4 h-4" />
-              <span className="font-medium">{user.points.toLocaleString()}</span>
-            </div>
-
-            {/* Notifications */}
-            <Button variant="ghost" size="sm" className="relative">
-              <Bell className="w-5 h-5" />
-              <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </Button>
-
-            {/* User Menu */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
-                  <Avatar className="h-10 w-10">
-                    <AvatarImage src={user.avatar} alt={user.name} />
-                    <AvatarFallback>
-                      {user.name.split(' ').map(n => n[0]).join('')}
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-80" align="end" forceMount>
-                <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col space-y-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium leading-none">{user.name}</p>
-                    </div>
-                    <p className="text-xs leading-none text-muted-foreground">
-                      {user.email}
-                    </p>
+            {isAuthenticated && customer ? (
+              <>
+                {/* Points Display - Only show if authenticated and loyalty program enabled */}
+                {hasLoyaltyProgram && (
+                  <div className="hidden sm:flex items-center gap-2 px-3 py-1 bg-purple-100 text-purple-700 rounded-full">
+                    <Star className="w-4 h-4" />
+                    <span className="font-medium">0</span>
                   </div>
-                </DropdownMenuLabel>
+                )}
+
+                {/* Notifications */}
+                <Button variant="ghost" size="sm" className="relative">
+                  <Bell className="w-5 h-5" />
+                  <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
+                </Button>
+
+                {/* User Menu */}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                      <Avatar className="h-10 w-10">
+                        <AvatarImage src={customer.avatar || ""} alt={`${customer.firstName} ${customer.lastName}`} />
+                        <AvatarFallback>
+                          {customer.firstName[0]}{customer.lastName[0]}
+                        </AvatarFallback>
+                      </Avatar>
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent className="w-80" align="end" forceMount>
+                    <DropdownMenuLabel className="font-normal">
+                      <div className="flex flex-col space-y-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-medium leading-none">{customer.firstName} {customer.lastName}</p>
+                        </div>
+                        <p className="text-xs leading-none text-muted-foreground">
+                          {customer.email}
+                        </p>
+                      </div>
+                    </DropdownMenuLabel>
                 
                 <DropdownMenuSeparator />
                 
                 {/* Points Summary */}
-                <div className="px-2 py-2">
-                  <div className="flex items-center justify-between p-2 bg-purple-50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <Star className="w-4 h-4 text-purple-600" />
-                      <span className="text-sm font-medium">Total Points</span>
+                {hasLoyaltyProgram && (
+                  <div className="px-2 py-2">
+                    <div className="flex items-center justify-between p-2 bg-purple-50 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Star className="w-4 h-4 text-purple-600" />
+                        <span className="text-sm font-medium">Total Points</span>
+                      </div>
+                      <span className="text-sm font-bold text-purple-600">
+                        0
+                      </span>
                     </div>
-                    <span className="text-sm font-bold text-purple-600">
-                      {user.points.toLocaleString()}
-                    </span>
                   </div>
-                </div>
+                )}
                 
                 <DropdownMenuSeparator />
 
@@ -195,6 +199,28 @@ export const Header = ({ title, showBackButton, onBack }: HeaderProps) => {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
+              </>
+            ) : (
+              <>
+                {/* Login/Register buttons for non-authenticated users */}
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => navigate("/login")}
+                  className="hidden sm:flex"
+                >
+                  Login
+                </Button>
+                <Button 
+                  size="sm"
+                  onClick={() => navigate("/register")}
+                  className="hidden sm:flex"
+                >
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Register
+                </Button>
+              </>
+            )}
 
             {/* Mobile Menu Toggle */}
             <Button 
@@ -211,31 +237,69 @@ export const Header = ({ title, showBackButton, onBack }: HeaderProps) => {
         {/* Mobile Menu */}
         {showMobileMenu && (
           <div className="md:hidden mt-4 pt-4 border-t space-y-2">
-            {hasLoyaltyProgram && (
-              <Button 
-                variant="ghost" 
-                className="w-full justify-start"
-                onClick={() => {
-                  navigate("/loyalty-rewards");
-                  setShowMobileMenu(false);
-                }}
-              >
-                <Gift className="mr-2 h-4 w-4" />
-                Rewards
-              </Button>
+            {isAuthenticated && customer ? (
+              <>
+                {hasLoyaltyProgram && (
+                  <Button 
+                    variant="ghost" 
+                    className="w-full justify-start"
+                    onClick={() => {
+                      navigate("/loyalty-rewards");
+                      setShowMobileMenu(false);
+                    }}
+                  >
+                    <Gift className="mr-2 h-4 w-4" />
+                    Rewards
+                  </Button>
+                )}
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-start"
+                  onClick={() => {
+                    navigate("/my-orders");
+                    setShowMobileMenu(false);
+                  }}
+                >
+                  <Package className="mr-2 h-4 w-4" />
+                  My Orders
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-start"
+                  onClick={() => {
+                    handleLogout();
+                    setShowMobileMenu(false);
+                  }}
+                >
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button 
+                  variant="ghost" 
+                  className="w-full justify-start"
+                  onClick={() => {
+                    navigate("/login");
+                    setShowMobileMenu(false);
+                  }}
+                >
+                  <User className="mr-2 h-4 w-4" />
+                  Login
+                </Button>
+                <Button 
+                  className="w-full justify-start"
+                  onClick={() => {
+                    navigate("/register");
+                    setShowMobileMenu(false);
+                  }}
+                >
+                  <UserPlus className="mr-2 h-4 w-4" />
+                  Register
+                </Button>
+              </>
             )}
-            <Button 
-              variant="ghost" 
-              className="w-full justify-start"
-              onClick={() => {
-                navigate("/my-orders");
-                setShowMobileMenu(false);
-              }}
-            >
-              <Package className="mr-2 h-4 w-4" />
-              My Orders
-            </Button>
-
           </div>
         )}
       </div>
