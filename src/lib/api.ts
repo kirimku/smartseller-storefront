@@ -1,9 +1,13 @@
 /**
  * SmartSeller API Integration Layer
  * Handles all communication with the SmartSeller platform
+ * Enhanced with tenant-aware routing capabilities
  */
 
-import { getApiBaseDomain, getTenantId } from '@/utils/subdomain';
+import { getApiBaseDomain } from '@/utils/subdomain';
+import { tokenRefreshInterceptor } from '@/services/tokenRefreshInterceptor';
+import { tenantAwareApiClient, TenantAwareRequestConfig } from './tenantAwareApiClient';
+import { tenantResolver } from '@/services/tenantResolver';
 
 // API Configuration
 export const API_CONFIG = {
@@ -49,15 +53,59 @@ export class SmartSellerApiClient {
   private baseUrl: string;
   private tenantId: string | null;
   private authToken: string | null = null;
+  private useTenantAwareRouting: boolean = true;
 
   constructor() {
     this.baseUrl = API_CONFIG.baseUrl;
-    this.tenantId = getTenantId();
+    // Use tenant resolver to get current tenant
+    const resolution = tenantResolver.resolveTenant();
+    this.tenantId = resolution.tenantId;
+    this.initializeTenantAwareClient();
+  }
+
+  // Initialize tenant-aware client
+  private async initializeTenantAwareClient() {
+    if (this.useTenantAwareRouting) {
+      try {
+        await tenantAwareApiClient.setAccessToken(this.authToken);
+      } catch (error) {
+        console.warn('Failed to initialize tenant-aware client:', error);
+        this.useTenantAwareRouting = false;
+      }
+    }
   }
 
   // Set authentication token
-  setAuthToken(token: string | null) {
+  async setAuthToken(token: string | null) {
     this.authToken = token;
+    
+    if (this.useTenantAwareRouting) {
+      try {
+        await tenantAwareApiClient.setAccessToken(token);
+      } catch (error) {
+        console.warn('Failed to update tenant-aware client token:', error);
+      }
+    }
+  }
+
+  // Enable/disable tenant-aware routing
+  setTenantAwareRouting(enabled: boolean) {
+    this.useTenantAwareRouting = enabled;
+    if (enabled) {
+      this.initializeTenantAwareClient();
+    }
+  }
+
+  // Get tenant-aware base URL
+  private getTenantAwareBaseUrl(tenantId?: string): string {
+    if (this.useTenantAwareRouting) {
+      try {
+        return tenantAwareApiClient.getTenantApiUrl(tenantId);
+      } catch (error) {
+        console.warn('Failed to get tenant-aware URL, falling back to default:', error);
+      }
+    }
+    return this.baseUrl;
   }
 
   // Get default headers
@@ -81,7 +129,7 @@ export class SmartSellerApiClient {
   // Make HTTP request with retry logic
   private async makeRequest<T>(
     endpoint: string,
-    options: RequestOptions = {}
+    options: RequestOptions & { tenantConfig?: TenantAwareRequestConfig } = {}
   ): Promise<ApiResponse<T>> {
     const {
       method = 'GET',
@@ -90,6 +138,7 @@ export class SmartSellerApiClient {
       timeout = API_CONFIG.timeout,
       retries = API_CONFIG.retries,
       requiresAuth = false,
+      tenantConfig,
     } = options;
 
     // Check authentication if required
@@ -97,8 +146,23 @@ export class SmartSellerApiClient {
       throw new Error('Authentication required');
     }
 
-    const url = `${this.baseUrl}${endpoint}`;
+    // Use tenant-aware base URL if enabled
+    const baseUrl = this.useTenantAwareRouting 
+      ? this.getTenantAwareBaseUrl(tenantConfig?.tenantId)
+      : this.baseUrl;
+    
+    const url = `${baseUrl}${endpoint}`;
     const requestHeaders = { ...this.getDefaultHeaders(), ...headers };
+
+    // Add tenant-specific headers if using tenant-aware routing
+    if (this.useTenantAwareRouting && tenantConfig) {
+      if (tenantConfig.tenantId) {
+        requestHeaders['X-Tenant-ID'] = tenantConfig.tenantId;
+      }
+      if (tenantConfig.customHeaders) {
+        Object.assign(requestHeaders, tenantConfig.customHeaders);
+      }
+    }
 
     const requestOptions: RequestInit = {
       method,
@@ -113,7 +177,7 @@ export class SmartSellerApiClient {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-        const response = await fetch(url, {
+        const response = await tokenRefreshInterceptor.enhancedFetch(url, {
           ...requestOptions,
           signal: controller.signal,
         });
@@ -170,6 +234,102 @@ export class SmartSellerApiClient {
 
   async delete<T>(endpoint: string, options?: Omit<RequestOptions, 'method' | 'body'>): Promise<ApiResponse<T>> {
     return this.makeRequest<T>(endpoint, { ...options, method: 'DELETE' });
+  }
+
+  // Tenant-aware HTTP method shortcuts
+  async getTenant<T>(
+    endpoint: string, 
+    tenantId: string, 
+    options?: Omit<RequestOptions, 'method' | 'body'>
+  ): Promise<ApiResponse<T>> {
+    return this.makeRequest<T>(endpoint, { 
+      ...options, 
+      method: 'GET',
+      tenantConfig: { tenantId, ...options?.tenantConfig }
+    });
+  }
+
+  async postTenant<T>(
+    endpoint: string, 
+    tenantId: string, 
+    body?: unknown, 
+    options?: Omit<RequestOptions, 'method'>
+  ): Promise<ApiResponse<T>> {
+    return this.makeRequest<T>(endpoint, { 
+      ...options, 
+      method: 'POST', 
+      body,
+      tenantConfig: { tenantId, ...options?.tenantConfig }
+    });
+  }
+
+  async putTenant<T>(
+    endpoint: string, 
+    tenantId: string, 
+    body?: unknown, 
+    options?: Omit<RequestOptions, 'method'>
+  ): Promise<ApiResponse<T>> {
+    return this.makeRequest<T>(endpoint, { 
+      ...options, 
+      method: 'PUT', 
+      body,
+      tenantConfig: { tenantId, ...options?.tenantConfig }
+    });
+  }
+
+  async patchTenant<T>(
+    endpoint: string, 
+    tenantId: string, 
+    body?: unknown, 
+    options?: Omit<RequestOptions, 'method'>
+  ): Promise<ApiResponse<T>> {
+    return this.makeRequest<T>(endpoint, { 
+      ...options, 
+      method: 'PATCH', 
+      body,
+      tenantConfig: { tenantId, ...options?.tenantConfig }
+    });
+  }
+
+  async deleteTenant<T>(
+    endpoint: string, 
+    tenantId: string, 
+    options?: Omit<RequestOptions, 'method' | 'body'>
+  ): Promise<ApiResponse<T>> {
+    return this.makeRequest<T>(endpoint, { 
+      ...options, 
+      method: 'DELETE',
+      tenantConfig: { tenantId, ...options?.tenantConfig }
+    });
+  }
+
+  // Tenant management methods
+  async switchTenant(tenantId: string): Promise<void> {
+    this.tenantId = tenantId;
+    if (this.useTenantAwareRouting) {
+      try {
+        await tenantAwareApiClient.switchTenant(tenantId);
+      } catch (error) {
+        console.warn('Failed to switch tenant in tenant-aware client:', error);
+      }
+    }
+  }
+
+  async validateTenantAccess(tenantId: string): Promise<boolean> {
+    if (this.useTenantAwareRouting) {
+      try {
+        await tenantAwareApiClient.switchTenant(tenantId);
+        return await tenantAwareApiClient.validateTenantConfiguration();
+      } catch (error) {
+        console.warn('Failed to validate tenant access:', error);
+        return false;
+      }
+    }
+    return true; // Fallback for non-tenant-aware mode
+  }
+
+  getCurrentTenant(): string | null {
+    return this.tenantId;
   }
 }
 

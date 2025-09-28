@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/contexts/TenantContext';
+import { useOAuth } from '@/hooks/useOAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -35,6 +36,7 @@ const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
 }) => {
   const { register, isLoading, error, clearError } = useAuth();
   const { tenant } = useTenant();
+  const { initiateLogin, isLoading: oauthLoading, error: oauthError, clearError: clearOAuthError } = useOAuth();
   
   const [formData, setFormData] = useState<FormData>({
     firstName: '',
@@ -180,12 +182,14 @@ const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
 
   const handleSocialLogin = async (provider: string) => {
     try {
-      // This would integrate with social login providers
-      // For now, we'll show a placeholder
-      console.log(`Social login with ${provider} for tenant:`, tenant?.id);
-      // TODO: Implement social login integration
+      clearError();
+      clearOAuthError();
+      await initiateLogin(provider);
+      // The OAuth flow will redirect to the callback page
+      // and then back to the success handler
     } catch (error) {
-      console.error(`${provider} login failed:`, error);
+      console.error('Social login failed:', error);
+      // Error handling is managed by the OAuth hook
     }
   };
 
@@ -213,10 +217,10 @@ const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
       </CardHeader>
       
       <CardContent className="space-y-4">
-        {error && (
+        {(error || oauthError) && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{error || oauthError}</AlertDescription>
           </Alert>
         )}
 
@@ -450,7 +454,7 @@ const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
               <Button
                 variant="outline"
                 onClick={() => handleSocialLogin('google')}
-                disabled={isLoading}
+                disabled={isLoading || oauthLoading}
                 className="w-full"
               >
                 <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
@@ -477,7 +481,7 @@ const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
               <Button
                 variant="outline"
                 onClick={() => handleSocialLogin('facebook')}
-                disabled={isLoading}
+                disabled={isLoading || oauthLoading}
                 className="w-full"
               >
                 <svg className="mr-2 h-4 w-4" fill="currentColor" viewBox="0 0 24 24">

@@ -1,6 +1,26 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import { TenantConfig, TenantContext as TenantContextType } from '@/types/tenant';
-import { getTenantId, getApiBaseDomain } from '@/utils/subdomain';
+import { TenantConfig } from '@/types/tenant';
+import { getApiBaseDomain } from '@/utils/subdomain';
+import { tenantResolver, TenantResolutionInfo, TenantType } from '@/services/tenantResolver';
+import { slugDetectionService, SlugDetectionResult } from '@/services/slugDetectionService';
+
+interface TenantContextType {
+  tenant: TenantConfig | null;
+  isLoading: boolean;
+  error: string | null;
+  subdomain: string | null;
+  isValidTenant: boolean;
+  // Enhanced slug resolution features
+  slug: string | null;
+  tenantResolution: TenantResolutionInfo | null;
+  slugDetection: SlugDetectionResult | null;
+  tenantType: TenantType;
+  apiBaseUrl: string;
+  // Backend compatibility methods
+  refreshTenant: () => Promise<void>;
+  validateSlug: (slug: string) => Promise<boolean>;
+  getTenantApiUrl: () => string;
+}
 
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
@@ -191,27 +211,13 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [subdomain, setSubdomain] = useState<string | null>(null);
+  const [slug, setSlug] = useState<string | null>(null);
+  const [tenantResolution, setTenantResolution] = useState<TenantResolutionInfo | null>(null);
+  const [slugDetection, setSlugDetection] = useState<SlugDetectionResult | null>(null);
+  const [tenantType, setTenantType] = useState<TenantType>('subdomain');
+  const [apiBaseUrl, setApiBaseUrl] = useState<string>('');
 
-  const detectSubdomain = (): string | null => {
-    if (typeof window === 'undefined') return null;
-    
-    const hostname = window.location.hostname;
-    
-    // For development (localhost), check for subdomain parameter or default to 'rexus'
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const subdomainParam = urlParams.get('tenant');
-      return subdomainParam || 'rexus'; // Default to rexus for development
-    }
-    
-    // For production, extract subdomain from hostname
-    const parts = hostname.split('.');
-    if (parts.length > 2) {
-      return parts[0]; // First part is the subdomain
-    }
-    
-    return null;
-  };
+
 
   const loadTenantConfig = async (detectedSubdomain: string) => {
     try {
@@ -294,14 +300,29 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
       setError(null);
 
       try {
-        // Get tenant ID from subdomain
-        const tenantId = getTenantId();
-        setSubdomain(tenantId);
+        // Initialize API base URL
+        const baseUrl = getApiBaseDomain();
+        setApiBaseUrl(baseUrl);
+
+        // Use the new tenant resolver to detect tenant
+        const resolution = tenantResolver.resolveTenant();
+        setTenantResolution(resolution);
+        setSubdomain(resolution.subdomain);
+        setSlug(resolution.slug);
+        setApiBaseUrl(resolution.apiBaseUrl);
         
-        if (tenantId) {
-          await loadTenantConfig(tenantId);
+        if (resolution.tenantId) {
+          // Get tenant type
+          const type = await tenantResolver.getTenantType(resolution.tenantId);
+          setTenantType(type);
+
+          // Perform slug detection
+          const slugResult = await slugDetectionService.detectSlug(resolution.tenantId);
+          setSlugDetection(slugResult);
+
+          await loadTenantConfig(resolution.tenantId);
         } else {
-          setError('No tenant subdomain detected');
+          setError('No tenant detected');
           setIsLoading(false);
         }
       } catch (err) {
@@ -313,12 +334,40 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
     loadTenant();
   }, []);
 
+  const refreshTenant = async (): Promise<void> => {
+    const resolution = tenantResolver.resolveTenant();
+    if (resolution.tenantId) {
+      await loadTenantConfig(resolution.tenantId);
+    }
+  };
+
+  const validateSlug = async (slug: string): Promise<boolean> => {
+    try {
+      const result = await slugDetectionService.detectSlug(slug);
+      return result.isValid;
+    } catch {
+      return false;
+    }
+  };
+
+  const getTenantApiUrl = (): string => {
+    return apiBaseUrl || getApiBaseDomain();
+  };
+
   const contextValue: TenantContextType = {
     tenant,
     isLoading,
     error,
     subdomain,
     isValidTenant: !!tenant && !error,
+    slug,
+    tenantResolution,
+    slugDetection,
+    tenantType,
+    apiBaseUrl: apiBaseUrl || getApiBaseDomain(),
+    refreshTenant,
+    validateSlug,
+    getTenantApiUrl,
   };
 
   return (

@@ -7,6 +7,7 @@ import PWAInstallPrompt from "@/components/common/PWAInstallPrompt";
 import { TenantProvider, useTenant } from "@/contexts/TenantContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { TenantLoader, TenantError } from "@/components/common/TenantLoader";
+import TokenExpirationAlert from "@/components/TokenExpirationAlert";
 import Index from "./pages/Index";
 import NotFound from "./pages/NotFound";
 import Warranty from "./pages/Warranty";
@@ -42,6 +43,10 @@ const TenantAwareApp = () => {
 
   return (
     <BrowserRouter>
+      <TokenExpirationAlert 
+        position="top-right"
+        autoHide={false}
+      />
       <Routes>
         <Route path="/" element={<Index />} />
         <Route path="/register" element={<Register />} />

@@ -1,9 +1,12 @@
 /**
  * Tenant Service - Handles tenant configuration and management
+ * Enhanced with slug-based resolution and backend compatibility
  */
 
 import { apiClient, ApiResponse, handleApiError } from '@/lib/api';
 import { TenantConfig, TenantApiResponse } from '@/types/tenant';
+import { tenantResolver, TenantResolutionInfo, TenantType } from './tenantResolver';
+import { slugDetectionService, SlugDetectionResult } from './slugDetectionService';
 
 export interface TenantUpdateRequest {
   branding?: Partial<TenantConfig['branding']>;
@@ -17,9 +20,117 @@ export interface TenantValidationResponse {
   error?: string;
 }
 
+export interface TenantResolutionRequest {
+  slug?: string;
+  subdomain?: string;
+  path?: string;
+  headers?: Record<string, string>;
+}
+
+export interface TenantResolutionResponse {
+  tenant: TenantConfig | null;
+  resolution: TenantResolutionInfo;
+  slugDetection: SlugDetectionResult;
+  apiUrl: string;
+  tenantType: TenantType;
+}
+
 export class TenantService {
   /**
-   * Get tenant configuration by subdomain
+   * Resolve tenant using multiple detection methods (slug, subdomain, path)
+   */
+  async resolveTenant(request: TenantResolutionRequest): Promise<TenantResolutionResponse> {
+    try {
+      // Determine the primary identifier
+      const identifier = request.slug || request.subdomain || request.path;
+      
+      if (!identifier) {
+        throw new Error('No tenant identifier provided');
+      }
+
+      // Perform tenant resolution
+      const resolution = tenantResolver.resolveTenant();
+      
+      // Perform slug detection
+      const slugDetection = await slugDetectionService.detectSlug(identifier);
+
+      // Get tenant configuration
+      let tenant: TenantConfig | null = null;
+      if (resolution.slug) {
+        tenant = await tenantResolver.getTenantBySlug(resolution.slug);
+      }
+
+      // Get API URL
+      const apiUrl = tenantResolver.getTenantApiUrl(resolution.slug || identifier);
+
+      // Get tenant type
+      const tenantType = resolution.slug ? await tenantResolver.getTenantType(resolution.slug) : TenantType.SHARED;
+
+      return {
+        tenant,
+        resolution,
+        slugDetection,
+        apiUrl,
+        tenantType,
+      };
+    } catch (error) {
+      console.error('Failed to resolve tenant:', error);
+      throw handleApiError(error);
+    }
+  }
+
+  /**
+   * Get tenant configuration by slug (enhanced method)
+   */
+  async getTenantBySlug(slug: string): Promise<TenantConfig | null> {
+    try {
+      // Use tenant resolver to get the appropriate API URL
+      const apiUrl = tenantResolver.getTenantApiUrl(slug);
+      const response = await apiClient.get<TenantApiResponse>(`${apiUrl}/api/tenants/${slug}`);
+      
+      if (response.success && response.data?.success && response.data.data) {
+        return response.data.data;
+      }
+      
+      return null;
+    } catch (error) {
+      console.error('Failed to fetch tenant configuration by slug:', error);
+      throw handleApiError(error);
+    }
+  }
+
+  /**
+   * Validate tenant slug with enhanced detection
+   */
+  async validateTenantSlug(slug: string): Promise<TenantValidationResponse> {
+    try {
+      const isValid = await tenantResolver.validateTenantSlug(slug);
+      
+      if (!isValid) {
+        return {
+          isValid: false,
+          error: 'Invalid tenant slug',
+        };
+      }
+
+      const tenant = await tenantResolver.getTenantBySlug(slug);
+      
+      return {
+        isValid: !!tenant,
+        tenant: tenant || undefined,
+        error: tenant ? undefined : 'Tenant not found',
+      };
+    } catch (error) {
+      console.error('Failed to validate tenant slug:', error);
+      return {
+        isValid: false,
+        error: error instanceof Error ? error.message : 'Validation failed',
+      };
+    }
+  }
+
+  /**
+   * Get tenant configuration by subdomain (legacy method for backward compatibility)
    */
   async getTenantBySubdomain(subdomain: string): Promise<TenantConfig | null> {
     try {
