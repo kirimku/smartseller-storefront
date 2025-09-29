@@ -1,15 +1,19 @@
 import React from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/contexts/TenantContext';
 import CustomerLogin from '@/components/auth/CustomerLogin';
 import { Button } from '@/components/ui/button';
-import { ArrowLeft, Home } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { ArrowLeft, Home, CheckCircle } from 'lucide-react';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();
   const { tenant } = useTenant();
+  
+  const isVerified = searchParams.get('verified') === 'true';
 
   // Redirect if already authenticated
   React.useEffect(() => {
@@ -77,6 +81,16 @@ const Login: React.FC = () => {
       <main className="container mx-auto px-4 py-8">
         <div className="flex justify-center">
           <div className="w-full max-w-md">
+            {/* Email Verification Success Message */}
+            {isVerified && (
+              <Alert className="mb-6 border-green-200 bg-green-50">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800">
+                  Email verified successfully! You can now sign in to your account.
+                </AlertDescription>
+              </Alert>
+            )}
+            
             <CustomerLogin
               onSuccess={handleLoginSuccess}
               onSwitchToRegister={handleSwitchToRegister}

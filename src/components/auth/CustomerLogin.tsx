@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/contexts/TenantContext';
 import { useOAuth } from '@/hooks/useOAuth';
@@ -9,8 +9,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Eye, EyeOff, Mail, Lock, AlertCircle } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, AlertCircle, Shield, Clock } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { handleLoginError } from '@/services/errorHandling';
 
 interface CustomerLoginProps {
   onSuccess?: () => void;
@@ -37,6 +38,40 @@ const CustomerLogin: React.FC<CustomerLoginProps> = ({
   
   const [showPassword, setShowPassword] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
+  const [loginAttempts, setLoginAttempts] = useState(0);
+  const [isRateLimited, setIsRateLimited] = useState(false);
+  const [rateLimitEndTime, setRateLimitEndTime] = useState<Date | null>(null);
+  const [securityWarnings, setSecurityWarnings] = useState<string[]>([]);
+  const [lastFailedAttempt, setLastFailedAttempt] = useState<Date | null>(null);
+
+  // Rate limiting and security monitoring
+  useEffect(() => {
+    const checkRateLimit = () => {
+      if (rateLimitEndTime && new Date() >= rateLimitEndTime) {
+        setIsRateLimited(false);
+        setRateLimitEndTime(null);
+        setLoginAttempts(0);
+      }
+    };
+
+    const interval = setInterval(checkRateLimit, 1000);
+    return () => clearInterval(interval);
+  }, [rateLimitEndTime]);
+
+  // Security warnings based on login attempts
+  useEffect(() => {
+    const warnings: string[] = [];
+    
+    if (loginAttempts >= 3) {
+      warnings.push('Multiple failed login attempts detected');
+    }
+    
+    if (lastFailedAttempt && new Date().getTime() - lastFailedAttempt.getTime() < 60000) {
+      warnings.push('Recent failed login attempt from this device');
+    }
+    
+    setSecurityWarnings(warnings);
+  }, [loginAttempts, lastFailedAttempt]);
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
@@ -49,8 +84,13 @@ const CustomerLogin: React.FC<CustomerLoginProps> = ({
 
     if (!formData.password) {
       errors.password = 'Password is required';
-    } else if (formData.password.length < 6) {
-      errors.password = 'Password must be at least 6 characters';
+    } else if (formData.password.length < 8) {
+      errors.password = 'Password must be at least 8 characters';
+    }
+
+    // Check for rate limiting
+    if (isRateLimited) {
+      errors.general = 'Too many login attempts. Please try again later.';
     }
 
     setValidationErrors(errors);
@@ -64,6 +104,11 @@ const CustomerLogin: React.FC<CustomerLoginProps> = ({
       return;
     }
 
+    // Check rate limiting
+    if (isRateLimited) {
+      return;
+    }
+
     clearError();
 
     try {
@@ -73,11 +118,53 @@ const CustomerLogin: React.FC<CustomerLoginProps> = ({
         rememberMe: formData.rememberMe,
       });
       
+      // Reset security state on successful login
+      setLoginAttempts(0);
+      setLastFailedAttempt(null);
+      setSecurityWarnings([]);
+      
       onSuccess?.();
     } catch (error) {
-      // Error is handled by the auth context
-      console.error('Login failed:', error);
+      // Use centralized error handling
+      const authError = handleLoginError(error, formData.email);
+      
+      // Handle failed login attempt
+      const newAttempts = loginAttempts + 1;
+      setLoginAttempts(newAttempts);
+      setLastFailedAttempt(new Date());
+      
+      // Implement progressive rate limiting
+      if (newAttempts >= 5) {
+        setIsRateLimited(true);
+        setRateLimitEndTime(new Date(Date.now() + 15 * 60 * 1000)); // 15 minutes
+      } else if (newAttempts >= 3) {
+        setIsRateLimited(true);
+        setRateLimitEndTime(new Date(Date.now() + 5 * 60 * 1000)); // 5 minutes
+      }
+      
+      // Add security warnings based on error type
+      const warnings: string[] = [];
+      if (authError.code === 'INVALID_CREDENTIALS') {
+        warnings.push(`Failed login attempt ${newAttempts}/5`);
+      }
+      if (newAttempts >= 3) {
+        warnings.push('Multiple failed attempts detected');
+      }
+      setSecurityWarnings(warnings);
     }
+  };
+
+  const getRemainingTime = (): string => {
+    if (!rateLimitEndTime) return '';
+    
+    const remaining = Math.max(0, rateLimitEndTime.getTime() - new Date().getTime());
+    const minutes = Math.floor(remaining / 60000);
+    const seconds = Math.floor((remaining % 60000) / 1000);
+    
+    if (minutes > 0) {
+      return `${minutes}m ${seconds}s`;
+    }
+    return `${seconds}s`;
   };
 
   const handleInputChange = (field: string, value: string | boolean) => {
@@ -101,8 +188,8 @@ const CustomerLogin: React.FC<CustomerLoginProps> = ({
       // The OAuth flow will redirect to the callback page
       // and then back to the success handler
     } catch (error) {
-      console.error('Social login failed:', error);
-      // Error handling is managed by the OAuth hook
+      // Use centralized error handling for social login
+      handleLoginError(error, formData.email);
     }
   };
 
@@ -118,10 +205,44 @@ const CustomerLogin: React.FC<CustomerLoginProps> = ({
       </CardHeader>
       
       <CardContent className="space-y-4">
-        {(error || oauthError) && (
+        {(error || oauthError || validationErrors.general) && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error || oauthError}</AlertDescription>
+            <AlertDescription>{error || oauthError || validationErrors.general}</AlertDescription>
+          </Alert>
+        )}
+
+        {isRateLimited && (
+          <Alert variant="destructive">
+            <Clock className="h-4 w-4" />
+            <AlertDescription>
+              Account temporarily locked due to multiple failed attempts. 
+              Try again in {getRemainingTime()}.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {securityWarnings.length > 0 && !isRateLimited && (
+          <Alert variant="warning">
+            <Shield className="h-4 w-4" />
+            <AlertDescription>
+              <div className="space-y-1">
+                <p className="font-medium">Security Notice:</p>
+                {securityWarnings.map((warning, index) => (
+                  <p key={index} className="text-sm">• {warning}</p>
+                ))}
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {loginAttempts > 0 && loginAttempts < 3 && (
+          <Alert>
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              {loginAttempts === 1 ? 'Incorrect credentials. Please try again.' : 
+               `${loginAttempts} failed attempts. Account will be temporarily locked after 3 attempts.`}
+            </AlertDescription>
           </Alert>
         )}
 
@@ -200,12 +321,17 @@ const CustomerLogin: React.FC<CustomerLoginProps> = ({
           <Button
             type="submit"
             className="w-full"
-            disabled={isLoading}
+            disabled={isLoading || isRateLimited}
           >
             {isLoading ? (
               <>
                 <LoadingSpinner size="sm" className="mr-2" />
                 Signing in...
+              </>
+            ) : isRateLimited ? (
+              <>
+                <Clock className="mr-2 h-4 w-4" />
+                Locked ({getRemainingTime()})
               </>
             ) : (
               'Sign in'
@@ -230,7 +356,7 @@ const CustomerLogin: React.FC<CustomerLoginProps> = ({
               <Button
                 variant="outline"
                 onClick={() => handleSocialLogin('google')}
-                disabled={isLoading || oauthLoading}
+                disabled={isLoading || oauthLoading || isRateLimited}
                 className="w-full"
               >
                 <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
@@ -257,7 +383,7 @@ const CustomerLogin: React.FC<CustomerLoginProps> = ({
               <Button
                 variant="outline"
                 onClick={() => handleSocialLogin('facebook')}
-                disabled={isLoading || oauthLoading}
+                disabled={isLoading || oauthLoading || isRateLimited}
                 className="w-full"
               >
                 <svg className="mr-2 h-4 w-4" fill="currentColor" viewBox="0 0 24 24">

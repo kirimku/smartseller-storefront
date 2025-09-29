@@ -279,13 +279,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         throw new Error('Tenant not available');
       }
 
-      // Add tenant context to registration request
-      const tenantAwareData = {
+      // Transform camelCase field names to snake_case for API compatibility
+      const dataWithCamelCase = data as RegisterRequest & { firstName?: string; lastName?: string };
+      const transformedData = {
         ...data,
+        first_name: dataWithCamelCase.firstName || data.first_name,
+        last_name: dataWithCamelCase.lastName || data.last_name,
         tenantId,
       };
 
-      const authResponse: AuthResponse = await customerService.register(tenantAwareData);
+      // Remove camelCase fields if they exist
+      if ('firstName' in transformedData) {
+        delete (transformedData as RegisterRequest & { firstName?: string }).firstName;
+      }
+      if ('lastName' in transformedData) {
+        delete (transformedData as RegisterRequest & { lastName?: string }).lastName;
+      }
+
+      const authResponse: AuthResponse = await customerService.register(transformedData);
       
       setCustomer(authResponse.customer);
       setIsAuthenticated(true);

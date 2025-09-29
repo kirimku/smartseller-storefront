@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { MobileNav } from "@/components/ui/mobile-nav";
 import { Header } from "@/components/common/Header";
+import { BarcodeScanner } from "@/components/common/BarcodeScanner";
 import { 
   QrCode, 
   Search, 
@@ -19,23 +20,22 @@ import {
   CheckCircle,
   ArrowLeft,
   Upload,
-  Truck
+  Truck,
+  Loader2
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
+import { WarrantyService } from "@/services/warrantyService";
+import { 
+  WarrantyProduct, 
+  SubmitClaimRequest, 
+  ValidateBarcodeResponse,
+  GetCustomerWarrantiesResponse,
+  ClaimFormData,
+  LogisticService,
+  WarrantyBarcode
+} from "@/types/warranty";
 
-type WarrantyProduct = {
-  id: string;
-  name: string;
-  model: string;
-  serialNumber: string;
-  purchaseDate: string;
-  warrantyExpiry: string;
-  status: "active" | "expired" | "claimed";
-  category: string;
-  image: string;
-};
-
-// Mock warranty data
+// Mock warranty data - will be replaced with API calls
 const mockWarrantyData: Record<string, WarrantyProduct> = {
   "WR001234": {
     id: "WR001234",
@@ -62,7 +62,7 @@ const mockWarrantyData: Record<string, WarrantyProduct> = {
 };
 
 // Logistics services options
-const logisticServices = [
+const logisticServices: LogisticService[] = [
   { value: "jne", label: "JNE Express", description: "2-3 business days" },
   { value: "jnt", label: "J&T Express", description: "1-2 business days" },
   { value: "sicepat", label: "SiCepat", description: "2-4 business days" },
@@ -71,7 +71,7 @@ const logisticServices = [
   { value: "pickup", label: "Self Pickup", description: "Visit service center" }
 ];
 
-// Mock warranty history for the user
+// Mock warranty history for the user - will be replaced with API calls
 const mockWarrantyHistory: WarrantyProduct[] = [
   {
     id: "WR001234",
@@ -123,25 +123,77 @@ type WarrantyStep = "lookup" | "details" | "claim-form" | "submitted" | "status-
 
 export default function Warranty() {
   const navigate = useNavigate();
+  const warrantyService = new WarrantyService();
+  
+  // State management
   const [currentStep, setCurrentStep] = useState<WarrantyStep>("lookup");
   const [warrantyId, setWarrantyId] = useState("");
   const [product, setProduct] = useState<WarrantyProduct | null>(null);
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<WarrantyProduct | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [error, setError] = useState("");
-
-  // Form state for warranty claim
-  const [claimForm, setClaimForm] = useState({
+  const [activeTab, setActiveTab] = useState("warranty");
+  
+  // Loading states
+  const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [isSubmittingClaim, setIsSubmittingClaim] = useState(false);
+  
+  // Warranty history
+  const [warrantyHistory, setWarrantyHistory] = useState<WarrantyProduct[]>([]);
+  
+  // Form state
+  const [claimForm, setClaimForm] = useState<ClaimFormData>({
     issueDescription: "",
     customerName: "",
     email: "",
     phone: "",
     address: "",
-    invoiceFile: null as File | null,
-    logisticService: ""
+    invoiceFile: null,
+    logisticService: "",
+    priority: "medium"
   });
 
-  const [activeTab, setActiveTab] = useState("home");
+  // Utility function to convert WarrantyBarcode to WarrantyProduct
+  const convertBarcodeToProduct = (barcode: WarrantyBarcode): WarrantyProduct => {
+    return {
+      id: barcode.id,
+      name: barcode.product_name || "Unknown Product",
+      model: barcode.product_model || "Unknown Model",
+      serialNumber: barcode.barcode_string,
+      purchaseDate: barcode.activation_date || barcode.created_at,
+      warrantyExpiry: barcode.expiry_date || "",
+      status: barcode.status === "activated" ? "active" : 
+              barcode.status === "expired" ? "expired" : 
+              barcode.status === "claimed" ? "claimed" : "active",
+      category: barcode.product_category || "Unknown",
+      image: "/placeholder.svg",
+      barcodeId: barcode.id
+    };
+  };
+
+  // Load warranty history on component mount
+  useEffect(() => {
+    const loadWarrantyHistory = async () => {
+      setIsLoadingHistory(true);
+      try {
+        const response = await warrantyService.getCustomerWarranties({ page: 1, limit: 10 });
+        if (response.success && response.data) {
+          const products = response.data.warranties.map(convertBarcodeToProduct);
+          setWarrantyHistory(products);
+        }
+      } catch (error) {
+        console.error("Failed to load warranty history:", error);
+        // Fallback to mock data if API fails
+        setWarrantyHistory(mockWarrantyHistory);
+      } finally {
+        setIsLoadingHistory(false);
+      }
+    };
+
+    loadWarrantyHistory();
+  }, []);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -161,40 +213,93 @@ export default function Warranty() {
     }
   };
 
-  const handleLookup = () => {
+  const handleLookup = async () => {
     setError("");
     if (!warrantyId.trim()) {
       setError("Please enter a warranty ID");
       return;
     }
 
-    const foundProduct = mockWarrantyData[warrantyId.toUpperCase()];
-    if (foundProduct) {
-      setProduct(foundProduct);
-      setCurrentStep("details");
-    } else {
-      setError("Warranty ID not found. Please check and try again.");
+    setIsLoading(true);
+    try {
+      const response = await warrantyService.lookupWarranty(warrantyId.trim());
+      if (response.success && response.data) {
+        setProduct(response.data);
+        setCurrentStep("details");
+      } else {
+        setError("Warranty ID not found. Please check and try again.");
+      }
+    } catch (error) {
+      console.error('Error looking up warranty:', error);
+      setError("Failed to lookup warranty. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
   const handleQRScan = () => {
-    setIsScanning(true);
-    // Simulate QR scan - in real app, would use camera
-    setTimeout(() => {
-      const sampleId = "WR001234";
-      setWarrantyId(sampleId);
-      setIsScanning(false);
-      const foundProduct = mockWarrantyData[sampleId];
-      if (foundProduct) {
-        setProduct(foundProduct);
-        setCurrentStep("details");
-      }
-    }, 2000);
+    setError("");
+    setIsScannerOpen(true);
   };
 
-  const handleClaimSubmit = (e: React.FormEvent) => {
+  const handleBarcodeScanned = async (scannedCode: string) => {
+    setIsScannerOpen(false);
+    setIsScanning(true);
+    setWarrantyId(scannedCode);
+    
+    try {
+      const response = await warrantyService.lookupWarranty(scannedCode);
+      if (response.success && response.data) {
+        setProduct(response.data);
+        setCurrentStep("details");
+      } else {
+        setError("Scanned warranty not found. Please try again.");
+      }
+    } catch (error) {
+      console.error('Error looking up scanned warranty:', error);
+      setError("Failed to lookup scanned warranty. Please try again.");
+    } finally {
+      setIsScanning(false);
+    }
+  };
+
+  const handleScannerClose = () => {
+    setIsScannerOpen(false);
+  };
+
+  const handleClaimSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setCurrentStep("submitted");
+    setError("");
+    
+    if (!product) {
+      setError("No product selected for claim");
+      return;
+    }
+
+    setIsSubmittingClaim(true);
+    try {
+      const claimData: SubmitClaimRequest = {
+        barcode_id: product.barcodeId || product.id,
+        issue_description: claimForm.issueDescription,
+        customer_name: claimForm.customerName,
+        customer_email: claimForm.email,
+        customer_phone: claimForm.phone,
+        customer_address: claimForm.address,
+        priority: claimForm.priority || 'medium'
+      };
+
+      const response = await warrantyService.submitClaim(claimData);
+      if (response.success) {
+        setCurrentStep("submitted");
+      } else {
+        setError(response.error || "Failed to submit claim. Please try again.");
+      }
+    } catch (error) {
+      console.error('Error submitting claim:', error);
+      setError("Failed to submit claim. Please try again.");
+    } finally {
+      setIsSubmittingClaim(false);
+    }
   };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -239,9 +344,13 @@ export default function Warranty() {
                 onChange={(e) => setWarrantyId(e.target.value)}
                 className="flex-1"
               />
-              <Button onClick={handleLookup} disabled={isScanning}>
-                <Search className="h-4 w-4 mr-2" />
-                Look Up
+              <Button onClick={handleLookup} disabled={isScanning || isLoading}>
+                {isLoading ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Search className="h-4 w-4 mr-2" />
+                )}
+                {isLoading ? "Looking up..." : "Look Up"}
               </Button>
             </div>
           </div>
@@ -277,8 +386,14 @@ export default function Warranty() {
       {/* Warranty History Section */}
       <div className="mt-8">
         <h2 className="text-xl font-semibold mb-4">My Warranties</h2>
-        <div className="space-y-3">
-          {mockWarrantyHistory.map((item) => (
+        {isLoadingHistory ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="h-6 w-6 animate-spin mr-2" />
+            <span>Loading warranties...</span>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {warrantyHistory.map((item) => (
             <Card key={item.id} className="p-4">
               <button
                 onClick={() => {
@@ -316,7 +431,8 @@ export default function Warranty() {
               </button>
             </Card>
           ))}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -668,8 +784,15 @@ export default function Warranty() {
             </Select>
           </div>
 
-          <Button type="submit" className="w-full">
-            Submit Warranty Claim
+          <Button type="submit" className="w-full" disabled={isSubmittingClaim}>
+            {isSubmittingClaim ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Submitting Claim...
+              </>
+            ) : (
+              "Submit Warranty Claim"
+            )}
           </Button>
         </form>
       </Card>
@@ -722,7 +845,16 @@ export default function Warranty() {
         {currentStep === "claim-form" && renderClaimForm()}
         {currentStep === "submitted" && renderSubmittedStep()}
       </div>
+      
+      {/* Barcode Scanner Modal */}
+      {isScannerOpen && (
+        <BarcodeScanner
+          onScanSuccess={handleBarcodeScanned}
+          onClose={handleScannerClose}
+        />
+      )}
+      
       <MobileNav activeTab={activeTab} onTabChange={handleTabChange} />
     </div>
   );
-}
+  }

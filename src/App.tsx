@@ -21,6 +21,7 @@ import Profile from "./pages/Profile";
 import MyOrders from "./pages/MyOrders";
 import Register from "./pages/Register";
 import Login from "./pages/Login";
+import EmailVerificationPage from "./components/auth/EmailVerificationPage";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +52,7 @@ const TenantAwareApp = () => {
         <Route path="/" element={<Index />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
+        <Route path="/verify-email" element={<EmailVerificationPage />} />
         <Route path="/warranty" element={<Warranty />} />
         <Route path="/referral" element={<Referral />} />
         <Route path="/spin-win" element={<SpinWin />} />

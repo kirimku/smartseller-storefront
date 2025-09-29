@@ -1,41 +1,26 @@
 /**
  * Customer Service - Handles customer authentication and profile management
- * Updated to use generated OpenAPI client
+ * Simplified to use only StorefrontApiClient methods that actually exist
  */
 
-import { apiClient as generatedApiClient } from '@/lib/apiClient';
-import type { 
-  LoginRequest as GeneratedLoginRequest,
-  LoginResponse as GeneratedLoginResponse,
-  ForgotPasswordRequest as GeneratedForgotPasswordRequest,
-  ResetPasswordRequest as GeneratedResetPasswordRequest,
-  UserDTO 
-} from '@/lib/apiClient';
-import { apiClient, ApiResponse, handleApiError } from '@/lib/api';
+import { 
+  StorefrontApiClient,
+  type CustomerRegistrationRequest,
+  type CustomerAuthRequest,
+  type CustomerAuthResponse,
+  type TokenRefreshResponse,
+  type Customer as ApiCustomer,
+  ApiError
+} from '@/lib/storefrontApiClient';
 import { secureTokenStorage, type TokenData, type CustomerData } from './secureTokenStorage';
-import { deviceFingerprinting } from '@/utils/deviceFingerprint';
-import { jwtTokenManager } from './jwtTokenManager';
-import { tokenRefreshInterceptor } from './tokenRefreshInterceptor';
 
-// Customer Types
-export interface Customer {
-  id: string;
-  email: string;
-  firstName: string;
-  lastName: string;
-  phone?: string;
-  dateOfBirth?: string;
-  gender?: 'male' | 'female' | 'other';
-  avatar?: string;
-  addresses: CustomerAddress[];
-  preferences: CustomerPreferences;
-  loyaltyPoints: number;
-  totalOrders: number;
-  totalSpent: number;
-  createdAt: string;
-  updatedAt: string;
-  emailVerified: boolean;
-  phoneVerified: boolean;
+// Customer Types (extending OpenAPI types)
+export interface Customer extends ApiCustomer {
+  addresses?: CustomerAddress[];
+  preferences?: CustomerPreferences;
+  loyaltyPoints?: number;
+  totalOrders?: number;
+  totalSpent?: number;
 }
 
 export interface CustomerAddress {
@@ -54,7 +39,7 @@ export interface CustomerAddress {
   isDefault: boolean;
 }
 
-export interface CustomerPreferences {
+export interface CustomerPreferences extends Record<string, unknown> {
   language: string;
   currency: string;
   timezone: string;
@@ -64,30 +49,18 @@ export interface CustomerPreferences {
   orderUpdates: boolean;
 }
 
-// Authentication Types
-export interface LoginRequest {
-  email: string;
-  password: string;
+// Authentication Types (using OpenAPI types)
+export interface LoginRequest extends CustomerAuthRequest {
   rememberMe?: boolean;
-  tenantId?: string; // Added for tenant-aware authentication
 }
 
-export interface RegisterRequest {
-  email: string;
-  password: string;
-  firstName: string;
-  lastName: string;
-  phone?: string;
+export interface RegisterRequest extends CustomerRegistrationRequest {
   acceptTerms: boolean;
   marketingOptIn?: boolean;
-  tenantId?: string; // Added for tenant-aware authentication
 }
 
-export interface AuthResponse {
+export interface AuthResponse extends CustomerAuthResponse {
   customer: Customer;
-  token: string;
-  refreshToken: string;
-  expiresIn: number;
 }
 
 export interface PasswordResetRequest {
@@ -99,40 +72,60 @@ export interface PasswordResetConfirm {
   newPassword: string;
 }
 
-export interface UpdateProfileRequest {
-  firstName?: string;
-  lastName?: string;
-  phone?: string;
-  dateOfBirth?: string;
-  gender?: 'male' | 'female' | 'other';
-  preferences?: Partial<CustomerPreferences>;
-}
-
-export interface ChangePasswordRequest {
-  currentPassword: string;
-  newPassword: string;
+export interface EmailVerificationRequest {
+  token: string;
 }
 
 export class CustomerService {
+  private apiClient: StorefrontApiClient;
+  private currentStorefrontSlug: string | null = null;
+
+  constructor() {
+    this.apiClient = new StorefrontApiClient();
+    this.initializeStorefront();
+  }
+
   /**
-   * Convert UserDTO to Customer interface
+   * Initialize storefront context
    */
-  private convertUserDtoToCustomer(userDto: UserDTO): Customer {
+  private initializeStorefront(): void {
+    // In development, automatically set to 'rexus' storefront
+    if (import.meta.env.DEV) {
+      this.currentStorefrontSlug = 'rexus';
+      console.info('Development mode: Using "rexus" as default storefront slug');
+    }
+    // In production, this will be set by the tenant context
+  }
+
+  /**
+   * Set the current storefront slug
+   */
+  public setStorefrontSlug(slug: string): void {
+    this.currentStorefrontSlug = slug;
+  }
+
+  /**
+   * Get the current storefront slug
+   */
+  private getStorefrontSlug(): string {
+    if (!this.currentStorefrontSlug) {
+      // In development, fallback to 'rexus' storefront
+      if (import.meta.env.DEV) {
+        console.warn('Storefront slug not set, falling back to "rexus" for development');
+        return 'rexus';
+      }
+      throw new ApiError({ message: 'Storefront slug not set', status: 400, details: 'MISSING_STOREFRONT' });
+    }
+    return this.currentStorefrontSlug;
+  }
+
+  /**
+   * Convert API Customer to local Customer interface
+   */
+  private convertApiCustomerToCustomer(apiCustomer: ApiCustomer): Customer {
     return {
-      id: userDto.id || '',
-      email: userDto.email || '',
-      firstName: userDto.firstName || '',
-      lastName: userDto.lastName || '',
-      phone: userDto.phone,
-      avatar: userDto.avatar,
-      emailVerified: userDto.emailVerified || false,
-      phoneVerified: userDto.phoneVerified || false,
-      createdAt: userDto.createdAt || '',
-      updatedAt: userDto.updatedAt || '',
-      // Default values for fields not in UserDTO
-      dateOfBirth: undefined,
-      gender: undefined,
-      addresses: [],
+      ...apiCustomer,
+      addresses: [], // Will be loaded separately if needed
       preferences: {
         language: 'en',
         currency: 'USD',
@@ -149,82 +142,71 @@ export class CustomerService {
   }
 
   /**
-   * Convert GeneratedLoginResponse to AuthResponse
-   */
-  private convertLoginResponse(response: GeneratedLoginResponse): AuthResponse {
-    const userData = response.data;
-    if (!userData?.user || !userData?.access_token) {
-      throw new Error('Invalid login response format');
-    }
-
-    return {
-      customer: this.convertUserDtoToCustomer(userData.user),
-      token: userData.access_token,
-      refreshToken: userData.refresh_token || '',
-      expiresIn: userData.token_expiry ? new Date(userData.token_expiry).getTime() - Date.now() : 3600000, // Default 1 hour
-    };
-  }
-
-  /**
-   * Login customer using generated API client with enhanced security
+   * Authenticate customer login
    */
   async login(credentials: LoginRequest): Promise<AuthResponse> {
     try {
-      // Validate device before login attempt
-      const deviceValidation = await deviceFingerprinting.validateDeviceForAuth();
-      
-      if (deviceValidation.riskLevel === 'high') {
-        console.warn('⚠️ High-risk device detected during login attempt');
-        // In production, you might want to require additional verification
-      }
+      const response = await this.apiClient.loginCustomer(
+        this.getStorefrontSlug(),
+        credentials
+      );
 
-      // Convert to generated API format
-      const loginRequest: GeneratedLoginRequest = {
-        email_or_phone: credentials.email,
-        password: credentials.password,
+      // Store authentication data
+      await this.storeAuthData(response);
+
+      // Convert to our AuthResponse format
+      const authResponse: AuthResponse = {
+        ...response,
+        customer: this.convertApiCustomerToCustomer(response.customer),
       };
 
-      const response = await generatedApiClient.login(loginRequest);
-      const authResponse = this.convertLoginResponse(response);
-      
-      // Store authentication data securely
-      await this.storeAuthData(authResponse);
-      
-      console.log('✅ Login successful with secure token storage');
       return authResponse;
     } catch (error) {
       console.error('❌ Login failed:', error);
-      throw error instanceof Error ? error : new Error('Login failed');
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError({ message: 'Login failed', status: 500, details: 'INTERNAL_ERROR' });
     }
   }
 
   /**
-   * Register new customer with enhanced security
+   * Register new customer
    */
   async register(data: RegisterRequest): Promise<AuthResponse> {
     try {
-      // Validate device before registration attempt
-      const deviceValidation = await deviceFingerprinting.validateDeviceForAuth();
-      
-      if (deviceValidation.riskLevel === 'high') {
-        console.warn('⚠️ High-risk device detected during registration attempt');
-        // In production, you might want to require additional verification
-      }
+      // Prepare registration request
+      const registrationRequest: CustomerRegistrationRequest = {
+        email: data.email,
+        password: data.password,
+        first_name: data.first_name,
+        last_name: data.last_name,
+        phone: data.phone,
+      };
 
-      const response = await apiClient.post<AuthResponse>('/api/auth/register', data);
-      
-      if (response.success && response.data) {
-        // Store authentication data securely
-        await this.storeAuthData(response.data);
-        
-        console.log('✅ Registration successful with secure token storage');
-        return response.data;
-      }
-      
-      throw new Error(response.error || 'Registration failed');
+      // Perform registration via storefront API
+      const registrationResponse = await this.apiClient.registerCustomer(
+        this.getStorefrontSlug(),
+        registrationRequest
+      );
+
+      // Registration successful, now automatically log in the user
+      // to get proper authentication tokens
+      const loginCredentials: LoginRequest = {
+        email: data.email,
+        password: data.password,
+      };
+
+      // Perform automatic login after successful registration
+      const authResponse = await this.login(loginCredentials);
+
+      return authResponse;
     } catch (error) {
       console.error('❌ Registration failed:', error);
-      throw handleApiError(error);
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError({ message: 'Registration failed', status: 500, details: 'INTERNAL_ERROR' });
     }
   }
 
@@ -233,286 +215,184 @@ export class CustomerService {
    */
   async logout(): Promise<void> {
     try {
-      await apiClient.post('/api/auth/logout', {}, { requiresAuth: true });
+      // Call logout endpoint
+      await this.apiClient.logoutCustomer(this.getStorefrontSlug());
+      
+      // Clear stored authentication data
+      this.clearAuthData();
+      
+      console.log('✅ Logout successful');
     } catch (error) {
-      console.error('Logout error:', error);
-    } finally {
-      // Clear auth data regardless of API response
-      apiClient.setAuthToken(null);
+      console.error('❌ Logout failed:', error);
+      // Clear auth data even if logout call fails
       this.clearAuthData();
     }
   }
 
   /**
-   * Refresh authentication token using JWT token manager
+   * Refresh access token using stored refresh token
    */
   async refreshToken(): Promise<AuthResponse> {
     try {
-      console.log('🔄 CustomerService: Attempting token refresh...');
-      
-      // Use JWT token manager for enhanced token refresh
-      const refreshed = await jwtTokenManager.refreshToken();
-      
-      if (refreshed) {
-        // Get the updated token data
-        const accessToken = secureTokenStorage.getAccessToken();
-        const refreshToken = secureTokenStorage.getRefreshToken();
-        const customerData = secureTokenStorage.getCustomerData();
-        
-        if (accessToken && refreshToken && customerData) {
-           // Update API client with new token
-           apiClient.setAuthToken(accessToken);
-           
-           // Convert to AuthResponse format for compatibility
-           const authResponse: AuthResponse = {
-             customer: customerData as unknown as Customer,
-             token: accessToken,
-             refreshToken: refreshToken,
-             expiresIn: 3600 // Default to 1 hour, will be updated by JWT manager
-           };
-          
-          console.log('✅ CustomerService: Token refresh successful');
-          return authResponse;
-        }
+      const refreshToken = await this.getStoredRefreshToken();
+      if (!refreshToken) {
+        throw new ApiError({ message: 'No refresh token available', status: 401, details: 'UNAUTHORIZED' });
       }
-      
-      throw new Error('Token refresh failed - no valid tokens available');
+
+      const response = await this.apiClient.refreshToken(this.getStorefrontSlug());
+
+      // Store new tokens
+      const tokenData: TokenData = {
+        accessToken: response.access_token,
+        refreshToken: response.refresh_token,
+        expiresAt: Date.now() + (response.expires_in * 1000),
+        tokenType: response.token_type,
+      };
+
+      const customerData = secureTokenStorage.getCustomerData();
+      if (customerData) {
+        await secureTokenStorage.storeTokens(tokenData, customerData);
+      }
+
+      // Return auth response format
+      const authResponse: AuthResponse = {
+        customer: this.getStoredCustomer()!,
+        access_token: response.access_token,
+        refresh_token: response.refresh_token,
+        token_type: response.token_type,
+        expires_in: response.expires_in,
+      };
+
+      return authResponse;
     } catch (error) {
-      console.error('❌ CustomerService: Token refresh failed:', error);
+      console.error('Token refresh failed:', error);
       this.clearAuthData();
-      throw handleApiError(error);
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError({ message: 'Token refresh failed', status: 401, details: 'UNAUTHORIZED' });
     }
   }
 
   /**
-   * Request password reset using generated API client
+   * Request password reset using storefront API client
    */
   async requestPasswordReset(data: PasswordResetRequest): Promise<void> {
     try {
-      const forgotPasswordRequest: GeneratedForgotPasswordRequest = {
-        email_or_phone: data.email,
-      };
-      
-      await generatedApiClient.forgotPassword(forgotPasswordRequest);
+      await this.apiClient.requestPasswordReset(
+        this.getStorefrontSlug(),
+        data.email
+      );
     } catch (error) {
       console.error('Password reset request failed:', error);
-      throw error instanceof Error ? error : new Error('Password reset request failed');
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError({ message: 'Password reset request failed', status: 500, details: 'INTERNAL_ERROR' });
     }
   }
 
   /**
-   * Confirm password reset using generated API client
+   * Confirm password reset using storefront API client
    */
   async confirmPasswordReset(data: PasswordResetConfirm): Promise<void> {
     try {
-      const resetPasswordRequest: GeneratedResetPasswordRequest = {
-        token: data.token,
-        new_password: data.newPassword,
-        confirm_password: data.newPassword, // Assuming the frontend validates this
-      };
-      
-      await generatedApiClient.resetPassword(resetPasswordRequest);
+      await this.apiClient.resetPassword(
+        this.getStorefrontSlug(),
+        data.token,
+        data.newPassword
+      );
     } catch (error) {
       console.error('Password reset failed:', error);
-      throw error instanceof Error ? error : new Error('Password reset failed');
-    }
-  }
-
-  /**
-   * Get current customer profile
-   */
-  async getProfile(): Promise<Customer> {
-    try {
-      const response = await apiClient.get<Customer>('/api/customers/profile', {
-        requiresAuth: true,
-      });
-      
-      if (response.success && response.data) {
-        return response.data;
+      if (error instanceof ApiError) {
+        throw error;
       }
-      
-      throw new Error('Failed to fetch profile');
-    } catch (error) {
-      console.error('Failed to fetch profile:', error);
-      throw handleApiError(error);
-    }
-  }
-
-  /**
-   * Update customer profile
-   */
-  async updateProfile(data: UpdateProfileRequest): Promise<Customer> {
-    try {
-      const response = await apiClient.put<Customer>('/api/customers/profile', data, {
-        requiresAuth: true,
-      });
-      
-      if (response.success && response.data) {
-        return response.data;
-      }
-      
-      throw new Error(response.error || 'Failed to update profile');
-    } catch (error) {
-      console.error('Failed to update profile:', error);
-      throw handleApiError(error);
-    }
-  }
-
-  /**
-   * Change password
-   */
-  async changePassword(data: ChangePasswordRequest): Promise<void> {
-    try {
-      const response = await apiClient.post('/api/customers/change-password', data, {
-        requiresAuth: true,
-      });
-      
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to change password');
-      }
-    } catch (error) {
-      console.error('Failed to change password:', error);
-      throw handleApiError(error);
-    }
-  }
-
-  /**
-   * Add customer address
-   */
-  async addAddress(address: Omit<CustomerAddress, 'id'>): Promise<CustomerAddress> {
-    try {
-      const response = await apiClient.post<CustomerAddress>('/api/customers/addresses', address, {
-        requiresAuth: true,
-      });
-      
-      if (response.success && response.data) {
-        return response.data;
-      }
-      
-      throw new Error(response.error || 'Failed to add address');
-    } catch (error) {
-      console.error('Failed to add address:', error);
-      throw handleApiError(error);
-    }
-  }
-
-  /**
-   * Update customer address
-   */
-  async updateAddress(addressId: string, address: Partial<CustomerAddress>): Promise<CustomerAddress> {
-    try {
-      const response = await apiClient.put<CustomerAddress>(
-        `/api/customers/addresses/${addressId}`,
-        address,
-        { requiresAuth: true }
-      );
-      
-      if (response.success && response.data) {
-        return response.data;
-      }
-      
-      throw new Error(response.error || 'Failed to update address');
-    } catch (error) {
-      console.error('Failed to update address:', error);
-      throw handleApiError(error);
-    }
-  }
-
-  /**
-   * Delete customer address
-   */
-  async deleteAddress(addressId: string): Promise<void> {
-    try {
-      const response = await apiClient.delete(`/api/customers/addresses/${addressId}`, {
-        requiresAuth: true,
-      });
-      
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to delete address');
-      }
-    } catch (error) {
-      console.error('Failed to delete address:', error);
-      throw handleApiError(error);
+      throw new ApiError({ message: 'Password reset failed', status: 500, details: 'INTERNAL_ERROR' });
     }
   }
 
   /**
    * Verify email address
    */
-  async verifyEmail(token: string): Promise<void> {
+  async verifyEmail(data: EmailVerificationRequest): Promise<void> {
     try {
-      const response = await apiClient.post('/api/auth/verify-email', { token });
-      
-      if (!response.success) {
-        throw new Error(response.error || 'Email verification failed');
-      }
+      await this.apiClient.verifyEmail(
+        this.getStorefrontSlug(),
+        data.token
+      );
     } catch (error) {
       console.error('Email verification failed:', error);
-      throw handleApiError(error);
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError({ message: 'Email verification failed', status: 500, details: 'INTERNAL_ERROR' });
     }
   }
 
   /**
    * Resend email verification
    */
-  async resendEmailVerification(): Promise<void> {
+  async resendEmailVerification(email: string): Promise<void> {
     try {
-      const response = await apiClient.post('/api/auth/resend-verification', {}, {
-        requiresAuth: true,
-      });
-      
-      if (!response.success) {
-        throw new Error(response.error || 'Failed to resend verification email');
-      }
+      await this.apiClient.resendEmailVerification(this.getStorefrontSlug(), email);
     } catch (error) {
       console.error('Failed to resend verification email:', error);
-      throw handleApiError(error);
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError({ message: 'Failed to resend verification email', status: 500, details: 'INTERNAL_ERROR' });
     }
   }
 
-  // Local storage helpers
   /**
    * Store authentication data securely
    */
-  async storeAuthData(authData: AuthResponse): Promise<void> {
+  private async storeAuthData(authResponse: CustomerAuthResponse): Promise<void> {
     try {
-      // Generate device fingerprint for security
-      const deviceValidation = await deviceFingerprinting.validateDeviceForAuth();
-      
-      // Convert to secure storage format
-      const tokenData: TokenData = {
-        accessToken: authData.token,
-        refreshToken: authData.refreshToken,
-        expiresAt: Date.now() + (authData.expiresIn * 1000),
-        tokenType: 'Bearer'
-      };
+      console.log('🔍 Debug - Auth response structure:', JSON.stringify(authResponse, null, 2));
 
-      const customerData: CustomerData = {
-        id: authData.customer.id,
-        email: authData.customer.email,
-        firstName: authData.customer.firstName,
-        lastName: authData.customer.lastName,
-        phone: authData.customer.phone,
-        isEmailVerified: authData.customer.emailVerified
-      };
+      // Validate response structure
+      if (!authResponse) {
+        throw new Error('Auth response is null or undefined');
+      }
+
+      if (!authResponse.access_token || !authResponse.refresh_token) {
+        throw new Error('Missing required tokens in auth response');
+      }
+
+      if (!authResponse.customer) {
+        throw new Error('Missing customer data in auth response');
+      }
+
+      if (!authResponse.customer.id) {
+        throw new Error('Missing customer ID in auth response');
+      }
 
       // Store tokens securely
-      secureTokenStorage.storeTokens(tokenData, customerData);
-      
-      // Store device fingerprint for security validation
-      secureTokenStorage.setTokenFingerprint(deviceValidation.fingerprint);
+      const tokenData: TokenData = {
+        accessToken: authResponse.access_token,
+        refreshToken: authResponse.refresh_token,
+        expiresAt: Date.now() + (authResponse.expires_in * 1000),
+        tokenType: authResponse.token_type,
+      };
 
-      // Update API clients with new token
-      apiClient.setAuthToken(authData.token);
-      generatedApiClient.setAccessToken(authData.token);
+      // Store customer data
+      const customerData: CustomerData = {
+        id: authResponse.customer.id,
+        email: authResponse.customer.email,
+        firstName: authResponse.customer.first_name,
+        lastName: authResponse.customer.last_name,
+        phone: authResponse.customer.phone || '',
+        isEmailVerified: true, // Assuming verified if login successful
+      };
 
-      // Start token monitoring with JWT token manager
-      jwtTokenManager.validateAndRefreshIfNeeded();
+      await secureTokenStorage.storeTokens(tokenData, customerData);
 
-      console.log('✅ Authentication data stored securely with JWT token manager active');
+      // Set token in API client for subsequent requests
+      this.apiClient.setAccessToken(authResponse.access_token);
     } catch (error) {
-      console.error('❌ Failed to store auth data:', error);
-      throw new Error('Failed to store authentication data securely');
+      console.error('Failed to store auth data:', error);
+      throw new Error('Failed to store authentication data');
     }
   }
 
@@ -521,17 +401,13 @@ export class CustomerService {
    */
   private clearAuthData(): void {
     try {
-      // Cleanup JWT token manager
-      jwtTokenManager.cleanup();
-      
+      // Clear stored tokens and customer data
       secureTokenStorage.clearTokens();
-      deviceFingerprinting.clearStoredFingerprint();
       
-      // Clear API client tokens
-      apiClient.setAuthToken('');
-      generatedApiClient.setAccessToken('');
+      // Clear API client token
+      this.apiClient.setAccessToken(null);
 
-      console.log('✅ Authentication data cleared and JWT token manager cleaned up');
+      console.log('✅ Authentication data cleared');
     } catch (error) {
       console.error('❌ Failed to clear auth data:', error);
     }
@@ -540,8 +416,8 @@ export class CustomerService {
   /**
    * Get stored refresh token
    */
-  private getStoredRefreshToken(): string | null {
-    return secureTokenStorage.getRefreshToken();
+  private async getStoredRefreshToken(): Promise<string | null> {
+    return await secureTokenStorage.getRefreshToken();
   }
 
   /**
@@ -553,18 +429,16 @@ export class CustomerService {
       if (!customerData) return null;
 
       // Convert back to full Customer interface
-      // Note: This is a simplified version, you might need to fetch full profile
       return {
         id: customerData.id,
         email: customerData.email,
-        firstName: customerData.firstName,
-        lastName: customerData.lastName,
+        first_name: customerData.firstName,
+        last_name: customerData.lastName,
         phone: customerData.phone,
-        emailVerified: customerData.isEmailVerified,
-        phoneVerified: false, // Default values for missing data
-        dateOfBirth: '',
-        gender: undefined,
-        avatar: '',
+        storefront_id: '',
+        created_at: '',
+        updated_at: '',
+        created_by: '',
         addresses: [],
         preferences: {
           language: 'en',
@@ -578,8 +452,6 @@ export class CustomerService {
         loyaltyPoints: 0,
         totalOrders: 0,
         totalSpent: 0,
-        createdAt: '',
-        updatedAt: ''
       };
     } catch (error) {
       console.error('❌ Failed to get stored customer:', error);
@@ -595,10 +467,10 @@ export class CustomerService {
   }
 
   /**
-   * Check if customer is authenticated
+   * Check if user is authenticated
    */
   isAuthenticated(): boolean {
-    return secureTokenStorage.isAuthenticated();
+    return !!this.getStoredAuthToken() && !!this.getStoredCustomer();
   }
 
   /**
@@ -609,19 +481,8 @@ export class CustomerService {
       const token = this.getStoredAuthToken();
       
       if (token) {
-        // Validate device fingerprint for security
-        const deviceValidation = await deviceFingerprinting.validateDeviceForAuth();
-        const storedFingerprint = secureTokenStorage.getTokenFingerprint();
-        
-        if (storedFingerprint && deviceValidation.riskLevel === 'high') {
-          console.warn('⚠️ Device fingerprint mismatch detected, clearing tokens');
-          this.clearAuthData();
-          return;
-        }
-
-        // Set tokens in API clients
-        apiClient.setAuthToken(token);
-        generatedApiClient.setAccessToken(token);
+        // Set token in API client
+        this.apiClient.setAccessToken(token);
 
         // Check if token needs refresh
         if (secureTokenStorage.isTokenExpiringSoon()) {
@@ -645,41 +506,40 @@ export class CustomerService {
   }
 
   /**
-   * Validate current session security
+   * Get current customer profile
    */
-  async validateSessionSecurity(): Promise<{
-    isValid: boolean;
-    riskLevel: 'low' | 'medium' | 'high';
-    requiresReauth: boolean;
-  }> {
-    try {
-      if (!this.isAuthenticated()) {
-        return { isValid: false, riskLevel: 'high', requiresReauth: true };
-      }
-
-      const deviceValidation = await deviceFingerprinting.validateDeviceForAuth();
-      const storedFingerprint = secureTokenStorage.getTokenFingerprint();
-
-      if (!storedFingerprint) {
-        return { isValid: true, riskLevel: 'medium', requiresReauth: false };
-      }
-
-      const fingerprintValidation = deviceFingerprinting.validateFingerprint(
-        deviceValidation.fingerprint,
-        storedFingerprint
-      );
-
-      return {
-        isValid: fingerprintValidation.isValid,
-        riskLevel: fingerprintValidation.riskLevel,
-        requiresReauth: fingerprintValidation.riskLevel === 'high'
-      };
-    } catch (error) {
-      console.error('❌ Session validation failed:', error);
-      return { isValid: false, riskLevel: 'high', requiresReauth: true };
+  async getProfile(): Promise<Customer> {
+    const storedCustomer = this.getStoredCustomer();
+    if (storedCustomer) {
+      return storedCustomer;
     }
+    throw new ApiError({ message: 'Profile not available', status: 404, details: 'NOT_FOUND' });
+  }
+
+  /**
+   * Social login (placeholder - not implemented in StorefrontApiClient)
+   */
+  async socialLogin(socialData: { accessToken: string; provider: string; tenantId?: string }): Promise<AuthResponse> {
+    // Placeholder - not yet implemented in StorefrontApiClient
+    throw new ApiError({
+      message: 'Social login not yet implemented in StorefrontApiClient',
+      status: 501,
+      details: { method: 'socialLogin' }
+    });
+  }
+
+  /**
+   * Update customer profile (placeholder - not implemented in StorefrontApiClient)
+   */
+  async updateProfile(data: Partial<Customer>): Promise<Customer> {
+    // Placeholder - not yet implemented in StorefrontApiClient
+    throw new ApiError({
+      message: 'Profile update not yet implemented in StorefrontApiClient',
+      status: 501,
+      details: { method: 'updateProfile' }
+    });
   }
 }
 
-// Create singleton instance
+// Export singleton instance
 export const customerService = new CustomerService();

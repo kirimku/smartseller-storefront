@@ -129,9 +129,9 @@ export const Header = ({ title, showBackButton, onBack }: HeaderProps) => {
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="relative h-10 w-10 rounded-full">
                       <Avatar className="h-10 w-10">
-                        <AvatarImage src={customer.avatar || ""} alt={`${customer.firstName} ${customer.lastName}`} />
+                        <AvatarImage src={customer.avatar || ""} alt={`${customer.firstName || ''} ${customer.lastName || ''}`} />
                         <AvatarFallback>
-                          {customer.firstName[0]}{customer.lastName[0]}
+                          {(customer.firstName?.[0] || '').toUpperCase()}{(customer.lastName?.[0] || '').toUpperCase()}
                         </AvatarFallback>
                       </Avatar>
                     </Button>
@@ -140,10 +140,10 @@ export const Header = ({ title, showBackButton, onBack }: HeaderProps) => {
                     <DropdownMenuLabel className="font-normal">
                       <div className="flex flex-col space-y-1">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-medium leading-none">{customer.firstName} {customer.lastName}</p>
+                          <p className="text-sm font-medium leading-none">{customer.firstName || ''} {customer.lastName || ''}</p>
                         </div>
                         <p className="text-xs leading-none text-muted-foreground">
-                          {customer.email}
+                          {customer.email || ''}
                         </p>
                       </div>
                     </DropdownMenuLabel>

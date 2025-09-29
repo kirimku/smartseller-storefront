@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Mail, ArrowLeft, CheckCircle, AlertCircle } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { handlePasswordResetError } from '@/services/errorHandling';
 
 interface PasswordResetProps {
   onBackToLogin?: () => void;
@@ -54,8 +55,8 @@ const PasswordReset: React.FC<PasswordResetProps> = ({
       setIsSubmitted(true);
       onSuccess?.();
     } catch (error) {
-      // Error is handled by the auth context
-      console.error('Password reset request failed:', error);
+      // Use centralized error handling
+      handlePasswordResetError(error, email);
     }
   };
 

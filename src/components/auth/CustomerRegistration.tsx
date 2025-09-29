@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTenant } from '@/contexts/TenantContext';
 import { useOAuth } from '@/hooks/useOAuth';
@@ -9,8 +9,10 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Eye, EyeOff, Mail, Lock, User, Phone, AlertCircle, CheckCircle } from 'lucide-react';
+import { Eye, EyeOff, Mail, Lock, User, Phone, AlertCircle, CheckCircle, Shield } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { passwordSecurity, type PasswordStrengthResult } from '@/services/passwordSecurity';
+import { handleRegistrationError } from '@/services/errorHandling';
 
 interface CustomerRegistrationProps {
   onSuccess?: () => void;
@@ -52,47 +54,49 @@ const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
-  const [passwordStrength, setPasswordStrength] = useState<{
-    score: number;
-    feedback: string[];
-  }>({ score: 0, feedback: [] });
+  const [passwordStrength, setPasswordStrength] = useState<PasswordStrengthResult | null>(null);
+  const [isCheckingBreach, setIsCheckingBreach] = useState(false);
+  const [breachCheckResult, setBreachCheckResult] = useState<{ isBreached: boolean; recommendation: string } | null>(null);
 
-  const validatePassword = (password: string) => {
-    const feedback: string[] = [];
-    let score = 0;
+  // Enhanced password validation with security checks
+  const validatePasswordSecurity = async (password: string) => {
+    if (!password) {
+      setPasswordStrength(null);
+      setBreachCheckResult(null);
+      return;
+    }
 
+    // Analyze password strength
+    const strength = passwordSecurity.analyzePasswordStrength(password);
+    setPasswordStrength(strength);
+
+    // Check for breaches (debounced)
     if (password.length >= 8) {
-      score += 1;
+      setIsCheckingBreach(true);
+      try {
+        const breachResult = await passwordSecurity.checkPasswordBreach(password);
+        setBreachCheckResult(breachResult);
+      } catch (error) {
+        console.warn('Breach check failed:', error);
+        setBreachCheckResult(null);
+      } finally {
+        setIsCheckingBreach(false);
+      }
     } else {
-      feedback.push('At least 8 characters');
+      setBreachCheckResult(null);
     }
-
-    if (/[a-z]/.test(password)) {
-      score += 1;
-    } else {
-      feedback.push('One lowercase letter');
-    }
-
-    if (/[A-Z]/.test(password)) {
-      score += 1;
-    } else {
-      feedback.push('One uppercase letter');
-    }
-
-    if (/\d/.test(password)) {
-      score += 1;
-    } else {
-      feedback.push('One number');
-    }
-
-    if (/[^a-zA-Z0-9]/.test(password)) {
-      score += 1;
-    } else {
-      feedback.push('One special character');
-    }
-
-    return { score, feedback };
   };
+
+  // Debounce password validation to avoid excessive API calls
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (formData.password) {
+        validatePasswordSecurity(formData.password);
+      }
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [formData.password]);
 
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {};
@@ -111,14 +115,16 @@ const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
       errors.email = 'Please enter a valid email address';
     }
 
-    if (formData.phone && !/^\+?[\d\s\-()]+$/.test(formData.phone)) {
-      errors.phone = 'Please enter a valid phone number';
+    if (formData.phone && !/^\+62\d{8,13}$/.test(formData.phone)) {
+      errors.phone = 'Please enter a valid Indonesian phone number (e.g., +628985276363)';
     }
 
     if (!formData.password) {
       errors.password = 'Password is required';
-    } else if (passwordStrength.score < 3) {
-      errors.password = 'Password is too weak';
+    } else if (passwordStrength && passwordStrength.score < 70) {
+      errors.password = 'Password does not meet security requirements';
+    } else if (breachCheckResult?.isBreached) {
+      errors.password = 'This password has been found in data breaches. Please choose a different password.';
     }
 
     if (!formData.confirmPassword) {
@@ -157,13 +163,44 @@ const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
       
       onSuccess?.();
     } catch (error) {
-      // Error is handled by the auth context
-      console.error('Registration failed:', error);
+      // Use centralized error handling
+      handleRegistrationError(error, formData.email);
+    }
+  };
+
+  // Format Indonesian phone numbers with +62 prefix
+  const formatPhoneNumber = (phone: string): string => {
+    // Remove all non-digit characters
+    const digitsOnly = phone.replace(/\D/g, '');
+    
+    // If empty, return empty
+    if (!digitsOnly) return '';
+    
+    // Handle different input formats
+    if (digitsOnly.startsWith('62')) {
+      // Already has country code (62), just add +
+      return `+${digitsOnly}`;
+    } else if (digitsOnly.startsWith('0')) {
+      // Remove leading 0 and add +62
+      return `+62${digitsOnly.substring(1)}`;
+    } else if (digitsOnly.startsWith('8')) {
+      // Starts with 8 (common Indonesian mobile format), add +62
+      return `+62${digitsOnly}`;
+    } else {
+      // For other formats, assume it needs +62 prefix
+      return `+62${digitsOnly}`;
     }
   };
 
   const handleInputChange = (field: keyof FormData, value: string | boolean) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    let processedValue = value;
+    
+    // Format phone number if it's the phone field
+    if (field === 'phone' && typeof value === 'string') {
+      processedValue = formatPhoneNumber(value);
+    }
+    
+    setFormData(prev => ({ ...prev, [field]: processedValue }));
     
     // Clear validation error for this field
     if (validationErrors[field]) {
@@ -174,10 +211,7 @@ const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
       });
     }
 
-    // Update password strength for password field
-    if (field === 'password' && typeof value === 'string') {
-      setPasswordStrength(validatePassword(value));
-    }
+    // Password validation is handled by useEffect with debouncing
   };
 
   const handleSocialLogin = async (provider: string) => {
@@ -188,21 +222,46 @@ const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
       // The OAuth flow will redirect to the callback page
       // and then back to the success handler
     } catch (error) {
-      console.error('Social login failed:', error);
-      // Error handling is managed by the OAuth hook
+      // Use centralized error handling for social login
+      handleRegistrationError(error, formData.email);
     }
   };
 
-  const getPasswordStrengthColor = (score: number) => {
-    if (score < 2) return 'bg-red-500';
-    if (score < 4) return 'bg-yellow-500';
-    return 'bg-green-500';
+  const getPasswordStrengthColor = (level: PasswordStrengthResult['level']) => {
+    switch (level) {
+      case 'very-weak':
+      case 'weak':
+        return 'bg-red-500';
+      case 'fair':
+        return 'bg-orange-500';
+      case 'good':
+        return 'bg-yellow-500';
+      case 'strong':
+        return 'bg-green-500';
+      case 'very-strong':
+        return 'bg-emerald-500';
+      default:
+        return 'bg-gray-300';
+    }
   };
 
-  const getPasswordStrengthText = (score: number) => {
-    if (score < 2) return 'Weak';
-    if (score < 4) return 'Medium';
-    return 'Strong';
+  const getPasswordStrengthText = (level: PasswordStrengthResult['level']) => {
+    switch (level) {
+      case 'very-weak':
+        return 'Very Weak';
+      case 'weak':
+        return 'Weak';
+      case 'fair':
+        return 'Fair';
+      case 'good':
+        return 'Good';
+      case 'strong':
+        return 'Strong';
+      case 'very-strong':
+        return 'Very Strong';
+      default:
+        return 'Unknown';
+    }
   };
 
   return (
@@ -291,7 +350,7 @@ const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
               <Input
                 id="phone"
                 type="tel"
-                placeholder="Enter your phone number"
+                placeholder="08985276363 (will be formatted as +628985276363)"
                 value={formData.phone}
                 onChange={(e) => handleInputChange('phone', e.target.value)}
                 className={`pl-10 ${validationErrors.phone ? 'border-destructive' : ''}`}
@@ -327,22 +386,72 @@ const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
             </div>
             
             {formData.password && (
-              <div className="space-y-2">
-                <div className="flex items-center space-x-2">
-                  <div className="flex-1 bg-muted rounded-full h-2">
-                    <div
-                      className={`h-2 rounded-full transition-all ${getPasswordStrengthColor(passwordStrength.score)}`}
-                      style={{ width: `${(passwordStrength.score / 5) * 100}%` }}
-                    />
+              <div className="space-y-3">
+                {/* Password Strength Indicator */}
+                {passwordStrength && (
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <div className="flex-1 bg-muted rounded-full h-2">
+                        <div
+                          className={`h-2 rounded-full transition-all ${getPasswordStrengthColor(passwordStrength.level)}`}
+                          style={{ width: `${passwordStrength.score}%` }}
+                        />
+                      </div>
+                      <span className="text-sm font-medium">
+                        {getPasswordStrengthText(passwordStrength.level)}
+                      </span>
+                    </div>
+                    
+                    {/* Estimated crack time */}
+                    <p className="text-xs text-muted-foreground">
+                      Estimated crack time: {passwordStrength.estimatedCrackTime}
+                    </p>
+                    
+                    {/* Security feedback */}
+                    {passwordStrength.feedback.length > 0 && (
+                      <div className="text-sm text-muted-foreground">
+                        <p className="font-medium mb-1">Suggestions:</p>
+                        <ul className="list-disc list-inside space-y-1">
+                          {passwordStrength.feedback.map((feedback, index) => (
+                            <li key={index} className="text-xs">{feedback}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    
+                    {/* Requirements checklist */}
+                    <div className="space-y-1">
+                      {passwordStrength.requirements.map((req) => (
+                        <div key={req.id} className="flex items-center space-x-2 text-xs">
+                          {req.met ? (
+                            <CheckCircle className="h-3 w-3 text-green-500" />
+                          ) : (
+                            <AlertCircle className="h-3 w-3 text-muted-foreground" />
+                          )}
+                          <span className={req.met ? 'text-green-600' : 'text-muted-foreground'}>
+                            {req.description}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <span className="text-sm text-muted-foreground">
-                    {getPasswordStrengthText(passwordStrength.score)}
-                  </span>
-                </div>
-                {passwordStrength.feedback.length > 0 && (
-                  <p className="text-sm text-muted-foreground">
-                    Missing: {passwordStrength.feedback.join(', ')}
-                  </p>
+                )}
+                
+                {/* Breach check indicator */}
+                {isCheckingBreach && (
+                  <div className="flex items-center space-x-2 text-xs text-muted-foreground">
+                    <LoadingSpinner size="sm" />
+                    <span>Checking password security...</span>
+                  </div>
+                )}
+                
+                {breachCheckResult && (
+                  <div className={`flex items-center space-x-2 text-xs ${
+                    breachCheckResult.isBreached ? 'text-red-600' : 'text-green-600'
+                  }`}>
+                    <Shield className="h-3 w-3" />
+                    <span>{breachCheckResult.recommendation}</span>
+                  </div>
                 )}
               </div>
             )}

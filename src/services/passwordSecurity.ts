@@ -54,11 +54,34 @@ class PasswordSecurityService {
   private breachCache: Map<string, CachedBreachResult> = new Map();
   private readonly CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
-  // Common passwords and patterns
+  // Common passwords and patterns (expanded list based on security research)
   private readonly COMMON_PASSWORDS = new Set([
+    // Most common passwords
     'password', '123456', '123456789', 'qwerty', 'abc123', 'password123',
     'admin', 'letmein', 'welcome', 'monkey', '1234567890', 'dragon',
-    'master', 'hello', 'freedom', 'whatever', 'qazwsx', 'trustno1'
+    'master', 'hello', 'freedom', 'whatever', 'qazwsx', 'trustno1',
+    
+    // Additional common passwords
+    'password1', 'password12', 'password123', '12345678', '1234567',
+    'sunshine', 'iloveyou', 'princess', 'football', 'charlie', 'aa123456',
+    'donald', 'bailey', 'access', 'love', 'secret', 'solo', 'hello123',
+    'flower', 'passw0rd', 'shadow', 'baseball', 'jordan', 'harley',
+    'ranger', 'buster', 'tiger', 'hockey', 'george', 'computer',
+    'michelle', 'jessica', 'pepper', '1111', 'zxcvbn', 'hunter',
+    'jennifer', 'thomas', 'martin', 'jordan23', 'starwars', 'klaster',
+    'golfer', 'cookie', 'matthew', 'daniel', 'amanda', 'summer',
+    'winter', 'spring', 'autumn', 'january', 'february', 'march',
+    'april', 'may', 'june', 'july', 'august', 'september', 'october',
+    'november', 'december', 'monday', 'tuesday', 'wednesday', 'thursday',
+    'friday', 'saturday', 'sunday',
+    
+    // Keyboard patterns
+    'qwertyuiop', 'asdfghjkl', 'zxcvbnm', '1qaz2wsx3edc', 'qweasd',
+    'qweasdzxc', '1q2w3e4r5t', 'qwer1234', 'asdf1234',
+    
+    // Common substitutions
+    'p@ssw0rd', 'p@ssword', 'passw0rd', '123456!', 'qwerty!',
+    'password!', 'admin123', 'root123', 'user123', 'test123'
   ]);
 
   private readonly KEYBOARD_PATTERNS = [
@@ -272,51 +295,93 @@ class PasswordSecurityService {
   }
 
   /**
-   * Check if password meets basic requirements
+   * Check if password meets modern security requirements
    */
   private checkPasswordRequirements(password: string): PasswordRequirement[] {
     return [
       {
-        id: 'length',
-        description: 'At least 8 characters long',
-        met: password.length >= 8,
+        id: 'length-min',
+        description: 'At least 12 characters long (modern standard)',
+        met: password.length >= 12,
         required: true
       },
       {
+        id: 'length-legacy',
+        description: 'At least 8 characters (legacy minimum)',
+        met: password.length >= 8,
+        required: false
+      },
+      {
         id: 'uppercase',
-        description: 'Contains uppercase letters',
+        description: 'Contains uppercase letters (A-Z)',
         met: /[A-Z]/.test(password),
         required: true
       },
       {
         id: 'lowercase',
-        description: 'Contains lowercase letters',
+        description: 'Contains lowercase letters (a-z)',
         met: /[a-z]/.test(password),
         required: true
       },
       {
         id: 'numbers',
-        description: 'Contains numbers',
+        description: 'Contains numbers (0-9)',
         met: /\d/.test(password),
         required: true
       },
       {
         id: 'symbols',
-        description: 'Contains special characters',
-        met: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password),
-        required: false
+        description: 'Contains special characters (!@#$%^&*)',
+        met: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?~`]/.test(password),
+        required: true
       },
       {
-        id: 'length-12',
-        description: 'At least 12 characters (recommended)',
-        met: password.length >= 12,
-        required: false
+        id: 'no-common',
+        description: 'Not a commonly used password',
+        met: !this.COMMON_PASSWORDS.has(password.toLowerCase()),
+        required: true
+      },
+      {
+        id: 'no-keyboard-patterns',
+        description: 'Does not contain keyboard patterns',
+        met: !this.detectPatterns(password).hasKeyboardPattern,
+        required: true
+      },
+      {
+        id: 'no-repeating',
+        description: 'Does not have excessive repeating characters',
+        met: !this.detectPatterns(password).hasRepeatingChars,
+        required: true
+      },
+      {
+        id: 'no-sequential',
+        description: 'Does not contain sequential characters',
+        met: !this.detectPatterns(password).hasSequentialChars,
+        required: true
       },
       {
         id: 'no-personal-info',
         description: 'Does not contain obvious personal information',
         met: !this.containsPersonalInfo(password),
         required: true
+      },
+      {
+        id: 'entropy-check',
+        description: 'Has sufficient randomness (entropy ≥ 50 bits)',
+        met: this.calculateEntropy(password) >= 50,
+        required: true
+      },
+      {
+        id: 'length-strong',
+        description: 'At least 16 characters (recommended for high security)',
+        met: password.length >= 16,
+        required: false
+      },
+      {
+        id: 'mixed-case-numbers',
+        description: 'Good mix of character types',
+        met: this.hasGoodCharacterMix(password),
+        required: false
       }
     ];
   }
@@ -467,6 +532,22 @@ class PasswordSecurityService {
       result = result.replace(new RegExp(letter, 'g'), symbol);
     }
     return result;
+  }
+
+  /**
+   * Check if password has a good mix of character types
+   */
+  private hasGoodCharacterMix(password: string): boolean {
+    const hasLower = /[a-z]/.test(password);
+    const hasUpper = /[A-Z]/.test(password);
+    const hasNumber = /[0-9]/.test(password);
+    const hasSymbol = /[!@#$%^&*()_+\-=[\]{}|;:,.<>?~`]/.test(password);
+    
+    // Count how many character types are present
+    const typeCount = [hasLower, hasUpper, hasNumber, hasSymbol].filter(Boolean).length;
+    
+    // Good mix means at least 3 different character types
+    return typeCount >= 3;
   }
 
   private getRandomChar(charset: string): string {

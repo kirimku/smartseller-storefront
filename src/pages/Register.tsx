@@ -19,8 +19,8 @@ const Register: React.FC = () => {
   }, [isAuthenticated, navigate]);
 
   const handleRegistrationSuccess = () => {
-    // Redirect to profile page after successful registration
-    navigate('/profile');
+    // Redirect to email verification page after successful registration
+    navigate('/verify-email?mode=resend');
   };
 
   const handleSwitchToLogin = () => {

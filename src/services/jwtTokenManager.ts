@@ -127,10 +127,20 @@ class JWTTokenManager {
    */
   public async validateAndRefreshIfNeeded(): Promise<boolean> {
     try {
+      // Check if we have any token first to avoid unnecessary validation
+      const hasToken = !!secureTokenStorage.getAccessToken();
+      if (!hasToken) {
+        // No token available - user is not authenticated, this is normal
+        return false;
+      }
+
       const validation = await this.validateCurrentToken();
       
       if (!validation.isValid) {
-        this.emitEvent('token_expired', { validation });
+        // Only emit token_expired event if we actually had a token that became invalid
+        if (hasToken) {
+          this.emitEvent('token_expired', { validation });
+        }
         return false;
       }
 
@@ -154,6 +164,7 @@ class JWTTokenManager {
       const accessToken = secureTokenStorage.getAccessToken();
       
       if (!accessToken) {
+        // No token available - this is normal for unauthenticated users
         return {
           isValid: false,
           isExpired: true,
@@ -164,6 +175,8 @@ class JWTTokenManager {
       return await this.validateToken(accessToken);
     } catch (error) {
       console.error('❌ Current token validation failed:', error);
+      // Clear any corrupted data
+      await this.clearCorruptedTokenData();
       return {
         isValid: false,
         isExpired: true,
@@ -177,6 +190,29 @@ class JWTTokenManager {
    */
   public async validateToken(token: string): Promise<TokenValidationResult> {
     try {
+      // Check if token exists and has basic JWT structure
+      if (!token || typeof token !== 'string') {
+        console.warn('⚠️ Invalid token: Token is null, undefined, or not a string');
+        return {
+          isValid: false,
+          isExpired: true,
+          needsRefresh: true
+        };
+      }
+
+      // Check JWT structure (should have 3 parts separated by dots)
+      const tokenParts = token.split('.');
+      if (tokenParts.length !== 3) {
+        console.warn('⚠️ Invalid token: Token does not have valid JWT structure (3 parts)');
+        // Clear corrupted token data
+        await this.clearCorruptedTokenData();
+        return {
+          isValid: false,
+          isExpired: true,
+          needsRefresh: true
+        };
+      }
+
       // Decode without verification first to check structure
       const claims = decodeJwt(token) as JWTClaims;
       const currentTime = Math.floor(Date.now() / 1000);
@@ -197,11 +233,28 @@ class JWTTokenManager {
       };
     } catch (error) {
       console.error('❌ Token validation error:', error);
+      // Clear corrupted token data when validation fails
+      await this.clearCorruptedTokenData();
       return {
         isValid: false,
         isExpired: true,
         needsRefresh: true
       };
+    }
+  }
+
+  /**
+   * Clear corrupted token data
+   */
+  private async clearCorruptedTokenData(): Promise<void> {
+    try {
+      console.log('🧹 Clearing corrupted token data...');
+      await secureTokenStorage.clearTokens();
+      // Stop monitoring to prevent repeated validation attempts
+      this.stopTokenMonitoring();
+      console.log('✅ Corrupted token data cleared');
+    } catch (error) {
+      console.error('❌ Failed to clear corrupted token data:', error);
     }
   }
 
