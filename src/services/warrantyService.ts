@@ -15,6 +15,8 @@ import {
   ValidateBarcodeResponse,
   ActivateWarrantyRequest,
   ActivateWarrantyResponse,
+  CustomerWarrantyRegistrationRequest,
+  CustomerWarrantyRegistrationResponse,
   GetCustomerWarrantiesParams,
   GetCustomerWarrantiesResponse,
   GetWarrantyDetailsResponse,
@@ -207,6 +209,37 @@ export class WarrantyService {
         success: false,
         error: error instanceof ApiError ? error.message : 'Warranty activation failed',
         message: 'Failed to activate warranty'
+      };
+    }
+  }
+
+  /**
+   * Register warranty to customer account (Authentication required)
+   */
+  async registerWarranty(data: CustomerWarrantyRegistrationRequest): Promise<WarrantyServiceResponse<CustomerWarrantyRegistrationResponse>> {
+    try {
+      const response = await this.makeRequest<CustomerWarrantyRegistrationResponse>(
+        this.buildWarrantyUrl('warranties/register'),
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(data),
+        }
+      );
+
+      return {
+        success: true,
+        data: response,
+        message: 'Warranty registered successfully'
+      };
+    } catch (error) {
+      console.error('❌ Warranty registration failed:', error);
+      return {
+        success: false,
+        error: error instanceof ApiError ? error.message : 'Warranty registration failed',
+        message: 'Failed to register warranty'
       };
     }
   }

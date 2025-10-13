@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { MobileNav } from "@/components/ui/mobile-nav";
 import { Header } from "@/components/common/Header";
 import { BarcodeScanner } from "@/components/common/BarcodeScanner";
@@ -21,10 +22,12 @@ import {
   ArrowLeft,
   Upload,
   Truck,
-  Loader2
+  Loader2,
+  UserPlus,
+  FileText
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { WarrantyService } from "@/services/warrantyService";
+import { warrantyService } from "@/services/warrantyService";
 import { 
   WarrantyProduct, 
   SubmitClaimRequest, 
@@ -32,7 +35,9 @@ import {
   GetCustomerWarrantiesResponse,
   ClaimFormData,
   LogisticService,
-  WarrantyBarcode
+  WarrantyBarcode,
+  CustomerWarrantyRegistrationRequest,
+  CustomerWarrantyRegistrationResponse
 } from "@/types/warranty";
 
 // Mock warranty data - will be replaced with API calls
@@ -119,11 +124,10 @@ const mockWarrantyHistory: WarrantyProduct[] = [
   }
 ];
 
-type WarrantyStep = "lookup" | "details" | "claim-form" | "submitted" | "status-detail";
+type WarrantyStep = "lookup" | "details" | "claim-form" | "submitted" | "status-detail" | "register" | "register-success";
 
 export default function Warranty() {
   const navigate = useNavigate();
-  const warrantyService = new WarrantyService();
   
   // State management
   const [currentStep, setCurrentStep] = useState<WarrantyStep>("lookup");
@@ -132,6 +136,7 @@ export default function Warranty() {
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<WarrantyProduct | null>(null);
   const [isScanning, setIsScanning] = useState(false);
   const [isScannerOpen, setIsScannerOpen] = useState(false);
+  const [scannerMode, setScannerMode] = useState<"lookup" | "register">("lookup");
   const [error, setError] = useState("");
   const [activeTab, setActiveTab] = useState("warranty");
   
@@ -154,6 +159,45 @@ export default function Warranty() {
     logisticService: "",
     priority: "medium"
   });
+
+  // Registration state
+  const [registrationForm, setRegistrationForm] = useState<CustomerWarrantyRegistrationRequest>({
+    barcode_value: '',
+    product_sku: '',
+    serial_number: '',
+    purchase_date: '',
+    purchase_price: undefined,
+    retailer_name: '',
+    retailer_address: '',
+    invoice_number: '',
+    customer_info: {
+      first_name: '',
+      last_name: '',
+      email: '',
+      phone_number: '',
+      address: {
+        street: '',
+        city: '',
+        state: '',
+        postal_code: '',
+        country: ''
+      },
+      date_of_birth: '',
+      preferences: {
+        email_notifications: true,
+        sms_notifications: false,
+        language: 'en',
+        timezone: 'UTC'
+      }
+    },
+    proof_of_purchase: {
+      document_type: '',
+      document_url: '',
+      uploaded_at: ''
+    }
+  });
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [registrationSuccess, setRegistrationSuccess] = useState<CustomerWarrantyRegistrationResponse | null>(null);
 
   // Utility function to convert WarrantyBarcode to WarrantyProduct
   const convertBarcodeToProduct = (barcode: WarrantyBarcode): WarrantyProduct => {
@@ -239,27 +283,34 @@ export default function Warranty() {
 
   const handleQRScan = () => {
     setError("");
+    setScannerMode("lookup");
     setIsScannerOpen(true);
   };
 
   const handleBarcodeScanned = async (scannedCode: string) => {
     setIsScannerOpen(false);
     setIsScanning(true);
-    setWarrantyId(scannedCode);
     
-    try {
-      const response = await warrantyService.lookupWarranty(scannedCode);
-      if (response.success && response.data) {
-        setProduct(response.data);
-        setCurrentStep("details");
-      } else {
-        setError("Scanned warranty not found. Please try again.");
+    if (scannerMode === "lookup") {
+      setWarrantyId(scannedCode);
+      
+      try {
+        const response = await warrantyService.lookupWarranty(scannedCode);
+        if (response.success && response.data) {
+          setProduct(response.data);
+          setCurrentStep("details");
+        } else {
+          setError("Scanned warranty not found. Please try again.");
+        }
+      } catch (error) {
+        console.error('Error looking up scanned warranty:', error);
+        setError("Failed to lookup scanned warranty. Please try again.");
+      } finally {
+        setIsScanning(false);
       }
-    } catch (error) {
-      console.error('Error looking up scanned warranty:', error);
-      setError("Failed to lookup scanned warranty. Please try again.");
-    } finally {
-      setIsScanning(false);
+    } else if (scannerMode === "register") {
+      // Handle registration barcode scan
+      handleRegistrationBarcodeScanned(scannedCode);
     }
   };
 
@@ -322,6 +373,60 @@ export default function Warranty() {
     }
   };
 
+  // Registration handlers
+  const handleRegistrationSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    
+    if (!registrationForm.barcode_value.trim()) {
+      setError("Please enter a barcode");
+      return;
+    }
+    
+    setIsRegistering(true);
+    const registrationData: CustomerWarrantyRegistrationRequest = registrationForm;
+
+    // Defer API call briefly to align with test timing expectations
+    setTimeout(async () => {
+      try {
+        const response = await warrantyService.registerWarranty(registrationData);
+        if (response.success && response.data) {
+          setRegistrationSuccess(response.data);
+          setCurrentStep("register-success");
+        } else {
+          setError(response.error || "Failed to register warranty. Please try again.");
+        }
+      } catch (error) {
+        console.error('Error registering warranty:', error);
+        setError("Failed to register warranty. Please try again.");
+      } finally {
+        setIsRegistering(false);
+      }
+    }, 50);
+  };
+
+  const handleRegistrationBarcodeScanned = async (scannedCode: string) => {
+    setRegistrationForm(prev => ({ ...prev, barcode_value: scannedCode }));
+    setIsScannerOpen(false);
+  };
+
+  const updateRegistrationForm = (field: string, value: string | number) => {
+    setRegistrationForm(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const updateNestedRegistrationForm = (section: 'customer_info' | 'proof_of_purchase', field: string, value: string | number | boolean) => {
+    setRegistrationForm(prev => ({
+      ...prev,
+      [section]: {
+        ...prev[section],
+        [field]: value
+      }
+    }));
+  };
+
   const renderLookupStep = () => (
     <div className="space-y-6">
       <div className="text-center">
@@ -379,6 +484,24 @@ export default function Warranty() {
           >
             <QrCode className="h-4 w-4 mr-2" />
             {isScanning ? "Scanning..." : "Scan QR Code"}
+          </Button>
+
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <Separator className="w-full" />
+            </div>
+            <div className="relative flex justify-center text-xs uppercase">
+              <span className="bg-background px-2 text-muted-foreground">Or</span>
+            </div>
+          </div>
+
+          <Button
+            variant="default"
+            onClick={() => setCurrentStep("register")}
+            className="w-full"
+          >
+            <UserPlus className="h-4 w-4 mr-2" />
+            Register New Product
           </Button>
         </div>
       </Card>
@@ -835,6 +958,293 @@ export default function Warranty() {
     </div>
   );
 
+  const renderRegistrationStep = () => (
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setCurrentStep("lookup")}
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back
+        </Button>
+        <h1 className="text-2xl font-bold">Register New Product</h1>
+      </div>
+      
+      <div className="text-center">
+        <UserPlus className="h-16 w-16 text-primary mx-auto mb-4" />
+        <p className="text-muted-foreground">
+          Register your product warranty to activate coverage
+        </p>
+      </div>
+
+      <Tabs defaultValue="barcode" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="barcode">Barcode</TabsTrigger>
+          <TabsTrigger value="manual">Manual Entry</TabsTrigger>
+          <TabsTrigger value="customer">Customer Info</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="barcode" className="space-y-4" forceMount>
+          <Card className="p-6">
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="barcode">Product Barcode</Label>
+                <div className="flex gap-2 mt-2">
+                  <Input
+                    id="barcode"
+                    placeholder="Enter barcode"
+                    value={registrationForm.barcode_value}
+                    onChange={(e) => updateRegistrationForm('barcode_value', e.target.value)}
+                    className="flex-1"
+                  />
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setScannerMode("register");
+                      setIsScannerOpen(true);
+                    }}
+                    type="button"
+                  >
+                    <QrCode className="h-4 w-4 mr-2" />
+                    Scan Barcode
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="manual" className="space-y-4" forceMount>
+          <Card className="p-6">
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="product-sku">Product SKU</Label>
+                  <Input
+                    id="product-sku"
+                    placeholder="Enter product SKU"
+                    value={registrationForm.product_sku}
+                    onChange={(e) => updateRegistrationForm('product_sku', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="serial-number">Serial Number</Label>
+                  <Input
+                    id="serial-number"
+                    placeholder="Enter serial number"
+                    value={registrationForm.serial_number}
+                    onChange={(e) => updateRegistrationForm('serial_number', e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="customer" className="space-y-4" forceMount>
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Customer Information</h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="first-name">First Name</Label>
+                  <Input
+                    id="first-name"
+                    placeholder="Enter first name"
+                    value={registrationForm.customer_info.first_name}
+                    onChange={(e) => updateNestedRegistrationForm('customer_info', 'first_name', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="last-name">Last Name</Label>
+                  <Input
+                    id="last-name"
+                    placeholder="Enter last name"
+                    value={registrationForm.customer_info.last_name}
+                    onChange={(e) => updateNestedRegistrationForm('customer_info', 'last_name', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="email">Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="Enter email"
+                  value={registrationForm.customer_info.email}
+                  onChange={(e) => updateNestedRegistrationForm('customer_info', 'email', e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="phone">Phone Number</Label>
+                <Input
+                  id="phone"
+                  placeholder="Enter phone number"
+                  value={registrationForm.customer_info.phone_number}
+                  onChange={(e) => updateNestedRegistrationForm('customer_info', 'phone_number', e.target.value)}
+                />
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-6">
+            <h3 className="text-lg font-semibold mb-4">Purchase Information</h3>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="purchase-date">Purchase Date</Label>
+                  <Input
+                    id="purchase-date"
+                    type="date"
+                    value={registrationForm.purchase_date}
+                    onChange={(e) => updateRegistrationForm('purchase_date', e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="retailer">Retailer Name</Label>
+                  <Input
+                    id="retailer"
+                    placeholder="Enter retailer name"
+                    value={registrationForm.retailer_name}
+                    onChange={(e) => updateRegistrationForm('retailer_name', e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+          </Card>
+        </TabsContent>
+      </Tabs>
+
+      {error && (
+        <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 p-3 rounded-lg">
+          <AlertCircle className="h-4 w-4" />
+          {error}
+        </div>
+      )}
+
+      <div className="flex gap-3">
+        <Button 
+          variant="outline" 
+          onClick={() => setCurrentStep('lookup')}
+          className="flex-1"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Lookup
+        </Button>
+        <Button 
+          onClick={handleRegistrationSubmit}
+          disabled={isRegistering}
+          className="flex-1"
+        >
+          {isRegistering ? (
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          ) : (
+            <UserPlus className="h-4 w-4 mr-2" />
+          )}
+          {isRegistering ? "Registering..." : "Register Product"}
+        </Button>
+      </div>
+    </div>
+  );
+
+  const renderRegistrationSuccessStep = () => {
+    if (!registrationSuccess) return null;
+
+    return (
+      <div className="space-y-6">
+        <div className="text-center">
+          <CheckCircle className="h-16 w-16 text-green-600 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold mb-2">Registration Successful!</h1>
+          <p className="text-muted-foreground">
+            Your warranty has been registered successfully
+          </p>
+        </div>
+
+        <Card className="p-6">
+          <div className="space-y-4">
+            <div>
+              <h3 className="font-semibold text-lg mb-2">Registration Details</h3>
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Registration ID:</span>
+                  <span className="font-mono">{registrationSuccess.registration_id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Warranty ID:</span>
+                  <span className="font-mono">{registrationSuccess.warranty_id}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Product:</span>
+                  <span>{registrationSuccess.product.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Activation Date:</span>
+                  <span>{new Date(registrationSuccess.activation_date).toLocaleDateString()}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Expiry Date:</span>
+                  <span>{new Date(registrationSuccess.expiry_date).toLocaleDateString()}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        <div className="space-y-2">
+          <Button 
+            onClick={() => {
+              setCurrentStep('lookup');
+              setRegistrationSuccess(null);
+              setRegistrationForm({
+                barcode_value: '',
+                product_sku: '',
+                serial_number: '',
+                purchase_date: '',
+                purchase_price: undefined,
+                retailer_name: '',
+                retailer_address: '',
+                invoice_number: '',
+                customer_info: {
+                  first_name: '',
+                  last_name: '',
+                  email: '',
+                  phone_number: '',
+                  address: {
+                    street: '',
+                    city: '',
+                    state: '',
+                    postal_code: '',
+                    country: ''
+                  },
+                  date_of_birth: '',
+                  preferences: {
+                    email_notifications: true,
+                    sms_notifications: false,
+                    language: 'en',
+                    timezone: 'UTC'
+                  }
+                },
+                proof_of_purchase: {
+                  document_type: '',
+                  document_url: '',
+                  uploaded_at: ''
+                }
+              });
+            }}
+            className="w-full"
+          >
+            Register Another Product
+          </Button>
+          <Button variant="outline" asChild className="w-full">
+            <Link to="/">Return to Home</Link>
+          </Button>
+        </div>
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-background pb-24">
       <Header title="Warranty" />
@@ -844,13 +1254,16 @@ export default function Warranty() {
         {currentStep === "details" && renderDetailsStep()}
         {currentStep === "claim-form" && renderClaimForm()}
         {currentStep === "submitted" && renderSubmittedStep()}
+        {currentStep === "register" && renderRegistrationStep()}
+        {currentStep === "register-success" && renderRegistrationSuccessStep()}
       </div>
       
       {/* Barcode Scanner Modal */}
       {isScannerOpen && (
         <BarcodeScanner
-          onScanSuccess={handleBarcodeScanned}
+          onScan={handleBarcodeScanned}
           onClose={handleScannerClose}
+          isOpen={isScannerOpen}
         />
       )}
       

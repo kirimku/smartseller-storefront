@@ -9,6 +9,10 @@
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "preview": "vite preview",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "generate:api": "openapi-generator-cli generate -c openapi-generator-config.json",
     "generate:api:clean": "rm -rf src/generated/api && npm run generate:api",
     "postinstall": "npm run generate:api"
@@ -78,6 +82,9 @@
     "@eslint/js": "^9.32.0",
     "@openapitools/openapi-generator-cli": "^2.23.4",
     "@tailwindcss/typography": "^0.5.16",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
     "@types/node": "^22.16.5",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
@@ -87,12 +94,14 @@
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
+    "jsdom": "^27.0.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",
     "vite": "^5.4.19",
     "vite-plugin-pwa": "^1.0.2",
+    "vitest": "^3.2.4",
     "workbox-window": "^7.3.0"
   }
 }

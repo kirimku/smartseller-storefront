@@ -156,6 +156,99 @@ export interface UploadAttachmentResponse {
   message: string;
 }
 
+// Warranty Registration Types (based on OpenAPI specification)
+export interface CustomerAddressInfo {
+  street: string;
+  city: string;
+  state: string;
+  postal_code: string;
+  country: string;
+}
+
+export interface CustomerPreferences {
+  email_notifications?: boolean;
+  sms_notifications?: boolean;
+  language?: string;
+  timezone?: string;
+}
+
+export interface CustomerRegistrationInfo {
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone_number: string;
+  address: CustomerAddressInfo;
+  date_of_birth?: string;
+  preferences?: CustomerPreferences;
+}
+
+export interface ProofOfPurchaseInfo {
+  document_type?: string;
+  document_url?: string;
+  uploaded_at?: string;
+}
+
+export interface CustomerWarrantyRegistrationRequest {
+  barcode_value: string;
+  product_sku: string;
+  serial_number: string;
+  purchase_date: string;
+  purchase_price?: number;
+  retailer_name: string;
+  retailer_address?: string;
+  invoice_number?: string;
+  customer_info: CustomerRegistrationInfo;
+  proof_of_purchase?: ProofOfPurchaseInfo;
+}
+
+export interface CustomerProductInfo {
+  id: string;
+  sku: string;
+  name: string;
+  brand: string;
+  model: string;
+  category: string;
+  description?: string;
+  image_url?: string;
+  price?: number;
+}
+
+export interface CustomerInfo {
+  id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  phone_number: string;
+}
+
+export interface CustomerWarrantyCoverage {
+  coverage_type: string;
+  covered_components: string[];
+  excluded_components: string[];
+  repair_coverage: boolean;
+  replacement_coverage: boolean;
+  labor_coverage: boolean;
+  parts_coverage: boolean;
+  terms: string[];
+  limitations?: string[];
+}
+
+export interface CustomerWarrantyRegistrationResponse {
+  success: boolean;
+  registration_id: string;
+  warranty_id: string;
+  barcode_value: string;
+  status: string;
+  activation_date: string;
+  expiry_date: string;
+  warranty_period: string;
+  product: CustomerProductInfo;
+  customer: CustomerInfo;
+  coverage: CustomerWarrantyCoverage;
+  next_steps: string[];
+  registration_time: string;
+}
+
 // Error Response Types
 export interface WarrantyErrorResponse {
   error: string;
