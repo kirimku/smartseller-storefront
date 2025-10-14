@@ -6,7 +6,7 @@
  */
 
 // Configuration
-const SW_CONFIG = {
+var SW_CONFIG = {
   // Service worker file name (VitePWA generates this)
   swFileName: 'sw.js',
   
@@ -60,7 +60,8 @@ async function registerServiceWorker() {
   try {
     console.log('🔧 Registering Service Worker...');
     
-    const swUrl = `${window.location.origin}/${SW_CONFIG.swFileName}`;
+    // Use dev service worker when running locally (VitePWA dev mode)
+    const swUrl = isDevelopment() ? '/dev-sw.js?dev-sw' : `/${SW_CONFIG.swFileName}`;
     
     registration = await navigator.serviceWorker.register(swUrl, {
       scope: SW_CONFIG.scope,

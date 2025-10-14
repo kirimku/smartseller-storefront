@@ -38,7 +38,16 @@ class TokenRefreshInterceptor {
       baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
       maxRetries: 3,
       retryDelay: 1000,
-      excludeEndpoints: ['/api/v1/auth/login', '/api/v1/auth/register', '/api/v1/auth/refresh'],
+      // Exclude auth endpoints from interception to avoid header overrides
+      excludeEndpoints: [
+        '/api/v1/auth/login',
+        '/api/v1/auth/register',
+        '/api/v1/auth/refresh',
+        // Storefront-scoped auth endpoints
+        '/auth/login',
+        '/auth/register',
+        '/auth/refresh'
+      ],
       ...config
     };
 
@@ -117,12 +126,19 @@ class TokenRefreshInterceptor {
    */
   private async addAuthorizationHeader(options: RequestInit): Promise<void> {
     const accessToken = secureTokenStorage.getAccessToken();
-    
-    if (accessToken) {
+    const existingHeaders = (options.headers as Record<string, string>) || {};
+    const hasAuthHeader = 'Authorization' in existingHeaders || 'authorization' in existingHeaders;
+
+    // Only add Authorization if none is present.
+    // This preserves explicit headers like refresh-token Authorization.
+    if (accessToken && !hasAuthHeader) {
       options.headers = {
-        ...options.headers,
+        ...existingHeaders,
         'Authorization': `Bearer ${accessToken}`
       };
+    } else {
+      // Keep headers unchanged if Authorization already set
+      options.headers = existingHeaders;
     }
   }
 
@@ -286,10 +302,12 @@ class AxiosStyleInterceptor {
   public async requestInterceptor(config: RequestInit & { url?: string }): Promise<RequestInit & { url?: string }> {
     // Add authorization header
     const accessToken = secureTokenStorage.getAccessToken();
-    
-    if (accessToken && config.url && !this.isExcludedEndpoint(config.url)) {
+    const currentHeaders = (config.headers as Record<string, string>) || {};
+    const hasAuthHeader = 'Authorization' in currentHeaders || 'authorization' in currentHeaders;
+
+    if (accessToken && config.url && !this.isExcludedEndpoint(config.url) && !hasAuthHeader) {
       config.headers = {
-        ...config.headers,
+        ...currentHeaders,
         'Authorization': `Bearer ${accessToken}`
       };
     }
@@ -316,7 +334,14 @@ class AxiosStyleInterceptor {
   }
 
   private isExcludedEndpoint(url: string): boolean {
-    const excludeEndpoints = ['/api/v1/auth/login', '/api/v1/auth/register', '/api/v1/auth/refresh'];
+    const excludeEndpoints = [
+      '/api/v1/auth/login',
+      '/api/v1/auth/register',
+      '/api/v1/auth/refresh',
+      '/auth/login',
+      '/auth/register',
+      '/auth/refresh'
+    ];
     return excludeEndpoints.some(endpoint => url.includes(endpoint));
   }
 }

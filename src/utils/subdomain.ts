@@ -142,8 +142,9 @@ export const getApiBaseDomain = (): string => {
   const { domain, isLocalhost } = getSubdomainInfo();
   
   if (isLocalhost) {
-    // For development, use localhost with API port
-    return 'http://localhost:3000'; // Assuming API runs on port 3000
+    // For development, prefer env base URL; fallback to localhost:8080
+    const envBase = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8090';
+    return envBase;
   }
   
   // For production, use api subdomain

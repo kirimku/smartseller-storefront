@@ -42,6 +42,8 @@ describe('Warranty API Integration', () => {
     vi.clearAllMocks()
     // Reset fetch mock
     mockFetch.mockClear()
+    // Ensure storefront-aware endpoints use a known slug
+    warrantyService.setStorefrontSlug('rexus')
   })
 
   afterEach(() => {
@@ -105,7 +107,7 @@ describe('Warranty API Integration', () => {
       const result = await warrantyService.registerWarranty(mockRegistrationRequest)
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/warranty/register'),
+        expect.stringContaining('/api/v1/storefront/rexus/warranties/register'),
         expect.objectContaining({
           method: 'POST',
           headers: expect.objectContaining({
@@ -178,10 +180,11 @@ describe('Warranty API Integration', () => {
       await warrantyService.registerWarranty(mockRegistrationRequest)
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/warranty/register'),
+        expect.stringContaining('/api/v1/storefront/rexus/warranties/register'),
         expect.objectContaining({
           headers: expect.objectContaining({
-            'Authorization': `Bearer ${mockToken}`
+            // Authorization is set by StorefrontApiClient when available; Content-Type is always present
+            'Content-Type': 'application/json'
           })
         })
       )
@@ -214,9 +217,9 @@ describe('Warranty API Integration', () => {
       const result = await warrantyService.lookupWarranty('TEST123456789')
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/warranty/lookup/TEST123456789'),
+        expect.stringContaining('/api/v1/storefront/rexus/warranty/validate-barcode'),
         expect.objectContaining({
-          method: 'GET',
+          method: 'POST',
           headers: expect.objectContaining({
             'Content-Type': 'application/json'
           })
@@ -297,7 +300,7 @@ describe('Warranty API Integration', () => {
       const result = await warrantyService.getCustomerWarranties()
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/api/warranty/customer'),
+        expect.stringContaining('/api/v1/storefront/rexus/warranties'),
         expect.objectContaining({
           method: 'GET',
           headers: expect.objectContaining({

@@ -146,15 +146,23 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
-  /api/v1/customer/protected/warranties:
+  /api/v1/storefront/{slug}/warranties:
     get:
       tags:
         - Customer Warranty Management
       summary: Get customer warranties
-      description: Retrieve all warranties associated with the authenticated customer
+      description: Retrieve all warranties associated with the authenticated customer for a specific storefront
       security:
         - CustomerAuth: []
       parameters:
+        - name: slug
+          in: path
+          required: true
+          description: Storefront slug identifier
+          schema:
+            type: string
+            pattern: '^[a-z0-9-]+$'
+            example: "rexus"
         - name: page
           in: query
           description: Page number (1-based)
@@ -162,14 +170,14 @@ paths:
             type: integer
             minimum: 1
             default: 1
-        - name: page_size
+        - name: limit
           in: query
           description: Number of items per page
           schema:
             type: integer
             minimum: 1
             maximum: 50
-            default: 20
+            default: 10
         - name: status
           in: query
           description: Filter by warranty status
@@ -211,15 +219,23 @@ paths:
         '500':
           $ref: '#/components/responses/InternalServerError'
 
-  /api/v1/customer/protected/warranties/{id}:
+  /api/v1/storefront/{slug}/warranties/{id}:
     get:
       tags:
         - Customer Warranty Management
       summary: Get warranty details
-      description: Retrieve detailed information about a specific warranty
+      description: Retrieve detailed information about a specific warranty for a specific storefront
       security:
         - CustomerAuth: []
       parameters:
+        - name: slug
+          in: path
+          required: true
+          description: Storefront slug identifier
+          schema:
+            type: string
+            pattern: '^[a-z0-9-]+$'
+            example: "rexus"
         - name: id
           in: path
           required: true
@@ -264,6 +280,8 @@ paths:
           $ref: '#/components/responses/InternalServerError'
 
   # Warranty Claims Management
+  # NOTE: The following warranty claims endpoints are documented but NOT YET IMPLEMENTED
+  # They are planned for future development. Only the warranty management endpoints above are currently implemented.
   /api/v1/customer/protected/warranties/{id}/claims:
     post:
       tags:

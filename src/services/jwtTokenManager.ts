@@ -12,6 +12,7 @@
 import { jwtVerify, decodeJwt, JWTPayload } from 'jose';
 import { secureTokenStorage } from './secureTokenStorage';
 import { deviceFingerprinting } from '../utils/deviceFingerprint';
+import { tenantResolver } from './tenantResolver';
 
 // Token-related interfaces
 interface TokenData {
@@ -67,7 +68,7 @@ class JWTTokenManager {
   private retryDelay = 1000; // 1 second
   private eventListeners: Map<TokenEventType, Array<(event: TokenEvent) => void>> = new Map();
   private refreshTimer: NodeJS.Timeout | null = null;
-  private baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+  private baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8090';
 
   private constructor() {
     this.initializeEventListeners();
@@ -215,11 +216,13 @@ class JWTTokenManager {
 
       // Decode without verification first to check structure
       const claims = decodeJwt(token) as JWTClaims;
-      const currentTime = Math.floor(Date.now() / 1000);
-      const timeToExpiry = (claims.exp || 0) - currentTime;
+      // Use milliseconds consistently across the app
+      const expSec = claims.exp || 0;
+      const timeToExpiryMs = (expSec * 1000) - Date.now();
       
-      const isExpired = timeToExpiry <= 0;
-      const needsRefresh = timeToExpiry <= (this.refreshBuffer / 1000);
+      const isExpired = timeToExpiryMs <= 0;
+      // refreshBuffer is already in milliseconds
+      const needsRefresh = timeToExpiryMs <= this.refreshBuffer;
 
       // Additional security validations
       const deviceValidation = await this.validateTokenDevice(claims);
@@ -229,7 +232,8 @@ class JWTTokenManager {
         isExpired,
         needsRefresh,
         claims,
-        timeToExpiry: Math.max(0, timeToExpiry)
+        // Return timeToExpiry in milliseconds for downstream consumers
+        timeToExpiry: Math.max(0, timeToExpiryMs)
       };
     } catch (error) {
       console.error('❌ Token validation error:', error);
@@ -316,7 +320,7 @@ class JWTTokenManager {
       try {
         console.log(`🔄 Token refresh attempt ${attempt}/${this.maxRetries}`);
         
-        const refreshToken = secureTokenStorage.getRefreshToken();
+        const refreshToken = await secureTokenStorage.getRefreshToken();
         if (!refreshToken) {
           throw new Error('No refresh token available');
         }
@@ -360,13 +364,52 @@ class JWTTokenManager {
   /**
    * Call the refresh token endpoint
    */
+  private getStorefrontSlug(): string {
+    try {
+      const resolution = tenantResolver.resolveTenant();
+      const slug = resolution.slug || resolution.tenantId || (import.meta.env.DEV ? 'rexus' : null);
+      if (!slug) {
+        throw new Error('Storefront slug not resolved');
+      }
+      return slug;
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        return 'rexus';
+      }
+      throw error instanceof Error ? error : new Error('Failed to resolve storefront slug');
+    }
+  }
+
+  private getApiBaseUrl(slug: string): string {
+    try {
+      return tenantResolver.getTenantApiUrl(slug);
+    } catch {
+      return this.baseURL;
+    }
+  }
+
   private async callRefreshEndpoint(refreshToken: string): Promise<TokenRefreshResponse> {
-    const response = await fetch(`${this.baseURL}/api/v1/auth/refresh`, {
+    const slug = this.getStorefrontSlug();
+    const base = this.getApiBaseUrl(slug);
+    const url = `${base}/api/v1/storefront/${slug}/auth/refresh`;
+    try {
+      console.debug('🔄 JWTTokenManager Refresh Request', {
+        url,
+        slug,
+        refreshTokenPreview: `${refreshToken.substring(0, 12)}...`,
+      });
+    } catch {}
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        // Keep Authorization for backward compatibility with servers expecting header-based refresh
         'Authorization': `Bearer ${refreshToken}`,
       },
+      // Send JSON payload for servers expecting body-based refresh contract
+      body: JSON.stringify({ refresh_token: refreshToken }),
     });
 
     if (!response.ok) {
@@ -392,7 +435,13 @@ class JWTTokenManager {
     };
 
     // Store the new tokens securely
-    await secureTokenStorage.storeTokens(tokenData, null);
+    const customerData = secureTokenStorage.getCustomerData();
+    if (customerData) {
+      await secureTokenStorage.storeTokens(tokenData, customerData);
+    } else {
+      // Fallback: update access token when customer data is not available
+      secureTokenStorage.updateAccessToken(tokenData.accessToken, tokenData.expiresAt);
+    }
 
     // Notify other tabs about token update
     if (typeof window !== 'undefined') {

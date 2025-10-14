@@ -51,7 +51,7 @@ class SecureTokenStorage {
   private readonly hmacKey: string;
   private currentDeviceFingerprint: string | null = null;
   private readonly maxTokenAge = 24 * 60 * 60 * 1000; // 24 hours
-  private readonly fingerprintValidationEnabled = true;
+  private fingerprintValidationEnabled: boolean = true;
 
   private constructor() {
     // Generate or retrieve encryption keys for localStorage fallback
@@ -61,6 +61,9 @@ class SecureTokenStorage {
     // Initialize device fingerprinting
     this.initializeDeviceFingerprinting();
     
+    // Configure fingerprint validation based on environment
+    this.fingerprintValidationEnabled = this.shouldEnableFingerprintValidation();
+
     // Initialize from existing storage on app start
     this.initializeFromStorage();
     
@@ -80,6 +83,16 @@ class SecureTokenStorage {
    */
   public async storeTokens(tokenData: TokenData, customerData: CustomerData): Promise<void> {
     try {
+      try {
+        console.debug('🧩 storeTokens input', {
+          accessTokenPreview: tokenData.accessToken?.substring(0, 12) + '...',
+          refreshTokenPreview: tokenData.refreshToken?.substring(0, 12) + '...',
+          expiresAtIso: new Date(tokenData.expiresAt).toISOString(),
+          hasFingerprint: !!tokenData.deviceFingerprint,
+          customerId: customerData.id,
+          customerEmailMasked: customerData.email?.replace(/(.{3}).*(.{3})@/, '$1***$2@')
+        });
+      } catch {}
       // Validate device fingerprint if enabled
       if (this.fingerprintValidationEnabled) {
         await this.validateDeviceFingerprint(tokenData.deviceFingerprint);
@@ -143,10 +156,16 @@ class SecureTokenStorage {
   public async getRefreshToken(): Promise<string | null> {
     try {
       const storedItem = localStorage.getItem('rt_secure');
+      console.log('🔍 Refresh token storage status:', { hasRt: !!storedItem });
       if (!storedItem) return null;
 
       // Decrypt and validate the stored item
       const decryptedData = await this.decryptSecureItem(storedItem);
+      console.log('🔍 Decrypted refresh token item:', {
+        hasData: !!decryptedData?.data,
+        deviceFingerprint: decryptedData?.deviceFingerprint,
+        ageMs: decryptedData ? (Date.now() - decryptedData.timestamp) : null
+      });
       if (!decryptedData) return null;
 
       // Validate device fingerprint if enabled
@@ -154,7 +173,10 @@ class SecureTokenStorage {
         const isValidDevice = await this.validateCurrentDeviceFingerprint(decryptedData.deviceFingerprint);
         if (!isValidDevice) {
           console.warn('⚠️ Device fingerprint mismatch - clearing tokens for security');
-          this.clearTokens();
+          // In development, do not aggressively clear tokens to aid diagnostics
+          if (this.fingerprintValidationEnabled) {
+            this.clearTokens();
+          }
           return null;
         }
       }
@@ -177,6 +199,15 @@ class SecureTokenStorage {
    * Get customer data
    */
   public getCustomerData(): CustomerData | null {
+    try {
+      const cd = this.customerData;
+      console.debug('👤 getCustomerData', {
+        present: !!cd,
+        id: cd?.id,
+        emailMasked: cd?.email?.replace(/(.{3}).*(.{3})@/, '$1***$2@'),
+        lastLoginAt: cd?.lastLoginAt,
+      });
+    } catch {}
     return this.customerData;
   }
 
@@ -268,21 +299,48 @@ class SecureTokenStorage {
   /**
    * Initialize storage from existing data on app start
    */
-  private initializeFromStorage(): void {
+  private async initializeFromStorage(): Promise<void> {
     try {
-      // Try to load customer data from encrypted localStorage
+      const hasCustomerEncrypted = !!localStorage.getItem('customer_secure');
+      const hasRtEncrypted = !!localStorage.getItem('rt_secure');
+      console.log('ℹ️ Secure storage init:', { hasCustomerEncrypted, hasRtEncrypted });
+
+      // Try to load customer data from secure localStorage format
       const encryptedCustomerData = localStorage.getItem('customer_secure');
       if (encryptedCustomerData) {
-        const decryptedData = this.decrypt(encryptedCustomerData);
-        this.customerData = JSON.parse(decryptedData);
+        const decryptedItem = await this.decryptSecureItem(encryptedCustomerData);
+        console.log('ℹ️ Customer decrypt status:', { success: !!decryptedItem, hasData: !!decryptedItem?.data });
+        if (decryptedItem && decryptedItem.data) {
+          this.customerData = JSON.parse(decryptedItem.data);
+        }
       }
 
       // Access token is not persisted (memory only)
       // Will need to be refreshed on app start
     } catch (error) {
       console.error('❌ Failed to initialize from storage:', error);
-      // Clear corrupted data
-      this.clearTokens();
+      // Do not clear all tokens here to avoid wiping valid refresh tokens
+    }
+  }
+
+  /**
+   * Decide whether to enable fingerprint validation based on environment
+   */
+  private shouldEnableFingerprintValidation(): boolean {
+    try {
+      const disableEnv = (import.meta as any)?.env?.VITE_DISABLE_FINGERPRINT_VALIDATION;
+      const isDevEnv = (import.meta as any)?.env?.DEV === true;
+      const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+      const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
+
+      if (disableEnv === 'true' || isDevEnv || isLocalHost) {
+        console.log('ℹ️ Fingerprint validation disabled for development/local environment');
+        return false;
+      }
+      return true;
+    } catch {
+      // Default to enabled if environment detection fails
+      return true;
     }
   }
 
@@ -291,11 +349,20 @@ class SecureTokenStorage {
    */
   private async storeEncryptedCustomerData(customerData: CustomerData): Promise<void> {
     try {
+      try {
+        console.debug('🔐 Storing encrypted customer data', {
+          hasFingerprint: !!this.currentDeviceFingerprint,
+          jsonLength: JSON.stringify(customerData).length,
+        });
+      } catch {}
       const encryptedData = await this.encryptSecureItem(
         JSON.stringify(customerData),
         this.currentDeviceFingerprint || undefined
       );
       localStorage.setItem('customer_secure', encryptedData);
+      try {
+        console.debug('📝 customer_secure bytes', { length: encryptedData.length });
+      } catch {}
     } catch (error) {
       console.error('❌ Failed to store customer data:', error);
       throw error;
@@ -307,11 +374,22 @@ class SecureTokenStorage {
    */
   private async storeEncryptedRefreshToken(refreshToken: string): Promise<void> {
     try {
+      try {
+        console.debug('🔐 Storing encrypted refresh token', {
+          hasFingerprint: !!this.currentDeviceFingerprint,
+          tokenPreview: refreshToken?.substring(0, 12) + '...'
+        });
+      } catch {}
       const encryptedToken = await this.encryptSecureItem(
         refreshToken,
         this.currentDeviceFingerprint || undefined
       );
       localStorage.setItem('rt_secure', encryptedToken);
+      try {
+        console.debug('📝 rt_secure bytes', {
+          length: encryptedToken.length
+        });
+      } catch {}
     } catch (error) {
       console.error('❌ Failed to store refresh token:', error);
       throw error;
@@ -322,11 +400,16 @@ class SecureTokenStorage {
    * Get or create encryption key for localStorage
    */
   private getOrCreateEncryptionKey(): string {
-    let key = sessionStorage.getItem('app_key');
+    // Prefer persistent key in localStorage to allow decryption across reloads
+    let key = localStorage.getItem('app_key') || sessionStorage.getItem('app_key');
     if (!key) {
-      // Generate a new key for this session
       key = CryptoJS.lib.WordArray.random(256/8).toString();
+    }
+    try {
+      localStorage.setItem('app_key', key);
       sessionStorage.setItem('app_key', key);
+    } catch {
+      // Ignore storage write failures
     }
     return key;
   }
@@ -419,7 +502,17 @@ class SecureTokenStorage {
    */
   private async decryptSecureItem(encryptedItem: string): Promise<SecureStorageItem | null> {
     try {
+      try { console.debug('🔍 decryptSecureItem: input length', encryptedItem?.length); } catch {}
       const secureItem: SecureStorageItem = JSON.parse(encryptedItem);
+      try {
+        console.debug('🔍 decryptSecureItem: parsed meta', {
+          hasData: !!secureItem?.data,
+          hasIv: !!secureItem?.iv,
+          hasSalt: !!secureItem?.salt,
+          ts: secureItem?.timestamp,
+          hasFingerprint: !!secureItem?.deviceFingerprint
+        });
+      } catch {}
       
       // Verify HMAC integrity
       const hmacData = secureItem.data + secureItem.iv + secureItem.salt + secureItem.timestamp;
@@ -429,6 +522,7 @@ class SecureTokenStorage {
         console.error('❌ HMAC verification failed - data may be tampered');
         return null;
       }
+      try { console.debug('✅ HMAC verification succeeded'); } catch {}
 
       // Derive key from master key and salt
       const salt = CryptoJS.enc.Hex.parse(secureItem.salt);
@@ -450,6 +544,7 @@ class SecureTokenStorage {
         console.error('❌ Decryption failed - invalid data');
         return null;
       }
+      try { console.debug('🔓 decryptSecureItem: decrypted length', decryptedData.length); } catch {}
 
       return {
         ...secureItem,
@@ -483,6 +578,11 @@ class SecureTokenStorage {
    */
   private async validateCurrentDeviceFingerprint(storedFingerprint: string): Promise<boolean> {
     try {
+      // In development or when explicitly disabled, always allow
+      if (!this.fingerprintValidationEnabled) {
+        return true;
+      }
+
       if (!this.currentDeviceFingerprint) {
         await this.initializeDeviceFingerprinting();
       }
@@ -497,8 +597,8 @@ class SecureTokenStorage {
         storedFingerprint
       );
 
-      // Allow if similarity is high enough and risk is low
-      return validation.isValid && validation.riskLevel === 'low';
+      // Allow if validation deems it acceptable (medium risk allowed)
+      return validation.isValid;
     } catch (error) {
       console.error('❌ Device fingerprint validation failed:', error);
       return false;

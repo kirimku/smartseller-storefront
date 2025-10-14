@@ -77,8 +77,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setIsLoading(true);
         setError(null);
 
-        // Only initialize if we have a valid tenant
-        if (!isValidTenant || !tenantId) {
+        // Proceed if we have a tenantId; don’t block on isValidTenant
+        if (!tenantId) {
           setIsLoading(false);
           return;
         }

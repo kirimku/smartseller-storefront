@@ -172,13 +172,36 @@ export class StorefrontApiClient {
     url: string,
     options: RequestInit = {}
   ): Promise<T> {
+    // Build headers, only set Content-Type when we have a request body
+    const providedHeaders = (options.headers as Record<string, string>) || {};
+    const hasBody = options.body !== undefined && options.body !== null;
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...((options.headers as Record<string, string>) || {}),
+      ...providedHeaders,
+      ...(hasBody ? { 'Content-Type': providedHeaders['Content-Type'] || 'application/json' } : {}),
     };
 
     if (this.accessToken && !headers.Authorization) {
       headers.Authorization = `Bearer ${this.accessToken}`;
+    }
+    // Debug: outbound request details (do not log full secrets)
+    try {
+      const bodyPreview = typeof options.body === 'string'
+        ? (options.body.length ? options.body.slice(0, 200) : '')
+        : (options.body ? '[non-string body]' : '');
+      const authHeader = headers.Authorization
+        ? `${headers.Authorization.substring(0, 20)}...`
+        : undefined;
+      console.debug('📤 HTTP Request', {
+        url,
+        method: options.method || 'GET',
+        contentType: headers['Content-Type'] || '(none)',
+        hasBody: hasBody,
+        bodyPreview,
+        hasAuthorization: !!headers.Authorization,
+        authorizationPreview: authHeader,
+      });
+    } catch {
+      // non-blocking
     }
 
     const response = await fetch(url, {
@@ -186,8 +209,26 @@ export class StorefrontApiClient {
       headers,
     });
 
+    // Debug: inbound response details
+    const contentType = response.headers.get('content-type') || '';
+    console.debug('📥 HTTP Response', {
+      url,
+      ok: response.ok,
+      status: response.status,
+      statusText: response.statusText,
+      contentType,
+    });
+
     if (!response.ok) {
-      const errorText = await response.text();
+      // Try parse JSON error first, then fallback to text
+      let parsedError: unknown = null;
+      try {
+        parsedError = await response.clone().json();
+      } catch {
+        // ignore
+      }
+      const errorText = parsedError ? JSON.stringify(parsedError) : await response.text();
+      console.error('❌ HTTP Error', { url, status: response.status, errorText });
       throw new ApiError({
         message: errorText || `HTTP ${response.status}: ${response.statusText}`,
         status: response.status,
@@ -196,7 +237,6 @@ export class StorefrontApiClient {
     }
 
     // Handle empty responses
-    const contentType = response.headers.get('content-type');
     if (contentType && contentType.includes('application/json')) {
       return response.json();
     }
@@ -285,11 +325,26 @@ export class StorefrontApiClient {
   /**
    * Refresh access token
    */
-  async refreshToken(storefrontSlug: string): Promise<TokenRefreshResponse> {
+  async refreshToken(storefrontSlug: string, refreshToken: string): Promise<TokenRefreshResponse> {
     const url = this.buildStorefrontUrl(storefrontSlug, 'refresh');
-    
+    // Debug: refresh request info
+    try {
+      console.debug('🔄 Refresh Request', {
+        url,
+        storefrontSlug,
+        refreshTokenPreview: `${refreshToken.substring(0, 12)}...`,
+      });
+    } catch {}
+
     return this.makeRequest<TokenRefreshResponse>(url, {
       method: 'POST',
+      headers: {
+        // Keep Authorization for backward compatibility with header-based servers
+        Authorization: `Bearer ${refreshToken}`,
+        Accept: 'application/json',
+      },
+      // Send JSON payload for servers expecting body-based refresh contract
+      body: JSON.stringify({ refresh_token: refreshToken }),
     });
   }
 

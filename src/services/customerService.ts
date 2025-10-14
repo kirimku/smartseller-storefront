@@ -235,11 +235,34 @@ export class CustomerService {
   async refreshToken(): Promise<AuthResponse> {
     try {
       const refreshToken = await this.getStoredRefreshToken();
+      try {
+        console.debug('🔐 Stored refresh token (pre-refresh)', {
+          present: !!refreshToken,
+          preview: refreshToken ? refreshToken.substring(0, 12) + '...' : undefined,
+        });
+      } catch {}
       if (!refreshToken) {
         throw new ApiError({ message: 'No refresh token available', status: 401, details: 'UNAUTHORIZED' });
       }
 
-      const response = await this.apiClient.refreshToken(this.getStorefrontSlug());
+      try {
+        console.debug('🚀 Calling refresh endpoint', {
+          slug: this.getStorefrontSlug(),
+        });
+      } catch {}
+
+      const response = await this.apiClient.refreshToken(this.getStorefrontSlug(), refreshToken);
+
+      try {
+        console.debug('✅ Refresh response received', {
+          hasAccessToken: !!response?.access_token,
+          accessTokenPreview: response?.access_token?.substring(0, 12) + '...',
+          hasRefreshToken: !!response?.refresh_token,
+          refreshTokenPreview: response?.refresh_token?.substring(0, 12) + '...',
+          tokenType: response?.token_type,
+          expiresIn: response?.expires_in,
+        });
+      } catch {}
 
       // Store new tokens
       const tokenData: TokenData = {
@@ -251,8 +274,23 @@ export class CustomerService {
 
       const customerData = secureTokenStorage.getCustomerData();
       if (customerData) {
+        try {
+          console.debug('💾 Persisting refreshed tokens with customer data', {
+            customerId: customerData.id,
+          });
+        } catch {}
         await secureTokenStorage.storeTokens(tokenData, customerData);
+      } else {
+        // Fallback: persist access token in secure storage even without customer data
+        // This ensures the app has a usable access token after refresh on reload
+        try {
+          console.debug('💾 Fallback: updating access token only (no customer data)');
+        } catch {}
+        secureTokenStorage.updateAccessToken(tokenData.accessToken, tokenData.expiresAt);
       }
+
+      // Update API client with new access token
+      this.apiClient.setAccessToken(response.access_token);
 
       // Return auth response format
       const authResponse: AuthResponse = {
@@ -266,6 +304,9 @@ export class CustomerService {
       return authResponse;
     } catch (error) {
       console.error('Token refresh failed:', error);
+      try {
+        console.debug('🧯 Refresh failure handling: clearing auth data');
+      } catch {}
       this.clearAuthData();
       if (error instanceof ApiError) {
         throw error;
@@ -479,6 +520,7 @@ export class CustomerService {
   async initializeAuth(): Promise<void> {
     try {
       const token = this.getStoredAuthToken();
+      const storedCustomer = this.getStoredCustomer();
       
       if (token) {
         // Set token in API client
@@ -497,7 +539,23 @@ export class CustomerService {
 
         console.log('✅ Authentication initialized successfully');
       } else {
-        console.log('ℹ️ No stored authentication found');
+        // No access token on reload; attempt refresh if we have a refresh token
+        const storedRefreshToken = await this.getStoredRefreshToken();
+        if (storedRefreshToken) {
+          console.log('🔄 No access token on reload, refreshing using stored refresh token...');
+          try {
+            await this.refreshToken();
+            console.log('✅ Startup refresh successful');
+          } catch (error) {
+            console.error('❌ Startup refresh failed:', error);
+            this.clearAuthData();
+          }
+        } else if (storedCustomer) {
+          // We have customer data but no refresh token
+          console.log('ℹ️ Customer data found but no refresh token; user not authenticated');
+        } else {
+          console.log('ℹ️ No stored authentication found');
+        }
       }
     } catch (error) {
       console.error('❌ Failed to initialize auth:', error);

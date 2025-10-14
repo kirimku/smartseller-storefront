@@ -196,8 +196,9 @@ export class TenantResolver implements TenantDatabaseResolver {
     const resolution = this.resolveTenant();
     
     if (resolution.isLocalhost || this.config.developmentMode) {
-      // Development mode - use localhost with tenant parameter
-      return `http://localhost:8080`; // Assuming backend runs on 8080
+      // Development mode - use env override when available
+      const envBase = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8090';
+      return envBase;
     }
 
     // Production mode - use tenant-aware API URL
@@ -301,7 +302,8 @@ export class TenantResolver implements TenantDatabaseResolver {
 
   private buildApiBaseUrl(tenantId: string | null, isLocalhost: boolean): string {
     if (isLocalhost || this.config.developmentMode) {
-      return 'http://localhost:8080'; // Development API
+      const envBase = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8090';
+      return envBase;
     }
 
     if (tenantId && this.config.apiBaseDomain.includes('{tenant}')) {

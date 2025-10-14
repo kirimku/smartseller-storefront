@@ -7,7 +7,7 @@ import {
   StorefrontApiClient,
   ApiError
 } from '@/lib/storefrontApiClient';
-import {
+import { 
   WarrantyBarcode,
   WarrantyClaim,
   WarrantyClaimAttachment,
@@ -32,6 +32,7 @@ import {
   WarrantyProduct,
   WarrantyBarcodeToProductConverter
 } from '@/types/warranty';
+import { secureTokenStorage } from '@/services/secureTokenStorage';
 
 export class WarrantyService {
   private apiClient: StorefrontApiClient;
@@ -98,8 +99,13 @@ export class WarrantyService {
       ...((options.headers as Record<string, string>) || {}),
     };
 
-    // Add authorization header if we have a token
-    const accessToken = this.apiClient.getAccessToken();
+    // If sending FormData, let the browser set the correct Content-Type
+    if (options.body instanceof FormData) {
+      delete headers['Content-Type'];
+    }
+
+    // Add authorization header from secure storage if available
+    const accessToken = secureTokenStorage.getAccessToken() || this.apiClient.getAccessToken();
     if (accessToken && !headers.Authorization) {
       headers.Authorization = `Bearer ${accessToken}`;
     }
@@ -259,14 +265,11 @@ export class WarrantyService {
       if (params.search) queryParams.set('search', params.search);
 
       const url = this.buildWarrantyUrl(
-        `warranty/customer/warranties?${queryParams.toString()}`
+        `warranties?${queryParams.toString()}`
       );
 
       const response = await this.makeRequest<GetCustomerWarrantiesResponse>(url, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.apiClient.getAccessToken()}`,
-        },
       });
 
       return {
@@ -327,9 +330,6 @@ export class WarrantyService {
 
       const response = await this.makeRequest<GetWarrantyDetailsResponse>(url, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.apiClient.getAccessToken()}`,
-        },
       });
 
       return {
@@ -360,7 +360,6 @@ export class WarrantyService {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiClient.getAccessToken()}`,
         },
         body: JSON.stringify(data),
       });
@@ -398,9 +397,6 @@ export class WarrantyService {
 
       const response = await this.makeRequest<GetCustomerClaimsResponse>(url, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.apiClient.getAccessToken()}`,
-        },
       });
 
       return {
@@ -429,9 +425,6 @@ export class WarrantyService {
 
       const response = await this.makeRequest<GetClaimDetailsResponse>(url, {
         method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${this.apiClient.getAccessToken()}`,
-        },
       });
 
       return {
@@ -462,7 +455,6 @@ export class WarrantyService {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiClient.getAccessToken()}`,
         },
         body: JSON.stringify(data),
       });
@@ -493,9 +485,6 @@ export class WarrantyService {
 
       await this.makeRequest(url, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${this.apiClient.getAccessToken()}`,
-        },
       });
 
       return {
@@ -527,9 +516,6 @@ export class WarrantyService {
 
       const response = await this.makeRequest<UploadAttachmentResponse>(url, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.apiClient.getAccessToken()}`,
-        },
         body: formData,
       });
 
@@ -559,9 +545,6 @@ export class WarrantyService {
 
       await this.makeRequest(url, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${this.apiClient.getAccessToken()}`,
-        },
       });
 
       return {
