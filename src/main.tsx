@@ -4,6 +4,8 @@ import './index.css'
 
 // Initialize PWA Cache Manager
 import { pwaCacheManager } from './utils/pwa-cache-manager'
+// Activate global fetch interceptor to coordinate token refresh and request retries
+import { tokenRefreshInterceptor } from './services/tokenRefreshInterceptor'
 
 // Initialize PWA functionality
 pwaCacheManager.initialize().then((initialized) => {
@@ -15,5 +17,13 @@ pwaCacheManager.initialize().then((initialized) => {
 }).catch((error) => {
   console.error('❌ PWA Cache Manager initialization error:', error);
 });
+
+// Ensure interceptor is initialized early
+try {
+  const status = tokenRefreshInterceptor.getStatus();
+  console.log('🛡️ TokenRefreshInterceptor active:', status);
+} catch (e) {
+  console.warn('⚠️ TokenRefreshInterceptor init warning:', e);
+}
 
 createRoot(document.getElementById("root")!).render(<App />);

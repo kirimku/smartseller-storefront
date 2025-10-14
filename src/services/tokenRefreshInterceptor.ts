@@ -51,7 +51,8 @@ class TokenRefreshInterceptor {
       ...config
     };
 
-    this.originalFetch = window.fetch;
+    // Bind native fetch to window to avoid Illegal invocation on call
+    this.originalFetch = window.fetch.bind(window);
     this.setupInterceptor();
   }
 
@@ -94,16 +95,20 @@ class TokenRefreshInterceptor {
     try {
       let response = await this.originalFetch(input, options);
 
-      // Handle 401 responses
-      if (response.status === 401 && this.hasAuthorizationHeader(options)) {
-        console.log('🔄 Received 401, attempting token refresh...');
-        
-        // Try to refresh token and retry request
-        const refreshed = await this.handleTokenRefresh();
-        if (refreshed) {
-          // Update authorization header with new token
-          await this.addAuthorizationHeader(options);
-          response = await this.originalFetch(input, options);
+      // Handle 401 responses: attempt refresh even if Authorization was missing,
+      // as long as we have a refresh token available (startup race scenario)
+      if (response.status === 401 && !this.shouldSkipInterception(url)) {
+        const hadAuthHeader = this.hasAuthorizationHeader(options);
+        const hasRefreshToken = await this.hasRefreshTokenAvailable();
+
+        if (hadAuthHeader || hasRefreshToken) {
+          console.log('🔄 Received 401, attempting token refresh (hadAuth:', hadAuthHeader, 'hasRT:', hasRefreshToken, ')');
+          const refreshed = await this.handleTokenRefresh();
+          if (refreshed) {
+            // Update authorization header with new token and retry
+            await this.addAuthorizationHeader(options);
+            response = await this.originalFetch(input, options);
+          }
         }
       }
 
@@ -148,6 +153,18 @@ class TokenRefreshInterceptor {
   private hasAuthorizationHeader(options: RequestInit): boolean {
     const headers = options.headers as Record<string, string> || {};
     return 'Authorization' in headers || 'authorization' in headers;
+  }
+
+  /**
+   * Check if a refresh token is available in secure storage
+   */
+  private async hasRefreshTokenAvailable(): Promise<boolean> {
+    try {
+      const rt = await secureTokenStorage.getRefreshToken();
+      return !!rt;
+    } catch {
+      return false;
+    }
   }
 
   /**
