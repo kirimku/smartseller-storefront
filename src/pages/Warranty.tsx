@@ -138,6 +138,7 @@ export default function Warranty() {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [scannerMode, setScannerMode] = useState<"lookup" | "register">("lookup");
   const [error, setError] = useState("");
+  const [lookupMessage, setLookupMessage] = useState("");
   const [activeTab, setActiveTab] = useState("warranty");
   
   // Loading states
@@ -259,6 +260,7 @@ export default function Warranty() {
 
   const handleLookup = async () => {
     setError("");
+    setLookupMessage("");
     if (!warrantyId.trim()) {
       setError("Please enter a warranty ID");
       return;
@@ -268,10 +270,11 @@ export default function Warranty() {
     try {
       const response = await warrantyService.lookupWarranty(warrantyId.trim());
       if (response.success && response.data) {
+        setLookupMessage(response.message || "");
         setProduct(response.data);
         setCurrentStep("details");
       } else {
-        setError("Warranty ID not found. Please check and try again.");
+        setError(response.message || "Warranty ID not found. Please check and try again.");
       }
     } catch (error) {
       console.error('Error looking up warranty:', error);
@@ -297,10 +300,11 @@ export default function Warranty() {
       try {
         const response = await warrantyService.lookupWarranty(scannedCode);
         if (response.success && response.data) {
+          setLookupMessage(response.message || "");
           setProduct(response.data);
           setCurrentStep("details");
         } else {
-          setError("Scanned warranty not found. Please try again.");
+          setError(response.message || "Scanned warranty not found. Please try again.");
         }
       } catch (error) {
         console.error('Error looking up scanned warranty:', error);
@@ -431,7 +435,7 @@ export default function Warranty() {
     <div className="space-y-6">
       <div className="text-center">
         <ShieldCheck className="h-16 w-16 text-primary mx-auto mb-4" />
-        <h1 className="text-2xl font-bold mb-2">Warranty Lookup</h1>
+        <h1 className="text-2xl font-bold mb-2">Warranty Program</h1>
         <p className="text-muted-foreground">
           Enter your warranty ID or scan the QR code on your product
         </p>
@@ -485,24 +489,6 @@ export default function Warranty() {
             <QrCode className="h-4 w-4 mr-2" />
             {isScanning ? "Scanning..." : "Scan QR Code"}
           </Button>
-
-          <div className="relative">
-            <div className="absolute inset-0 flex items-center">
-              <Separator className="w-full" />
-            </div>
-            <div className="relative flex justify-center text-xs uppercase">
-              <span className="bg-background px-2 text-muted-foreground">Or</span>
-            </div>
-          </div>
-
-          <Button
-            variant="default"
-            onClick={() => setCurrentStep("register")}
-            className="w-full"
-          >
-            <UserPlus className="h-4 w-4 mr-2" />
-            Register New Product
-          </Button>
         </div>
       </Card>
 
@@ -516,44 +502,68 @@ export default function Warranty() {
           </div>
         ) : (
           <div className="space-y-3">
-            {warrantyHistory.map((item) => (
-            <Card key={item.id} className="p-4">
-              <button
-                onClick={() => {
-                  setSelectedHistoryItem(item);
-                  setCurrentStep("status-detail");
-                }}
-                className="w-full text-left hover:bg-muted/50 transition-colors -m-4 p-4 rounded-lg"
-              >
-                <div className="flex gap-4">
-                  <img
-                    src={item.image}
-                    alt={item.name}
-                    className="w-12 h-12 object-cover rounded-lg bg-muted flex-shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between gap-3">
+            {warrantyHistory.length === 0 ? (
+              <Card className="p-8 text-center">
+                <div className="flex flex-col items-center">
+                  <ShieldCheck className="h-16 w-16 text-muted-foreground mb-3" />
+                  <h3 className="text-lg font-semibold">No warranties yet</h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Register your product to activate warranty coverage.
+                  </p>
+                  {/* <img
+                    src="/placeholder.svg"
+                    alt="Empty warranties"
+                    className="w-32 h-32 object-contain mb-4 opacity-75"
+                  /> */}
+                  <Button
+                    onClick={() => navigate(`/warranty/register${warrantyId ? `?barcode=${encodeURIComponent(warrantyId)}` : ''}`)}
+                    className="w-full max-w-xs"
+                  >
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Register New Product
+                  </Button>
+                </div>
+              </Card>
+            ) : (
+              warrantyHistory.map((item) => (
+                <Card key={item.id} className="p-4">
+                  <button
+                    onClick={() => {
+                      setSelectedHistoryItem(item);
+                      setCurrentStep("status-detail");
+                    }}
+                    className="w-full text-left hover:bg-muted/50 transition-colors -m-4 p-4 rounded-lg"
+                  >
+                    <div className="flex gap-4">
+                      <img
+                        src={item.image}
+                        alt={item.name}
+                        className="w-12 h-12 object-cover rounded-lg bg-muted flex-shrink-0"
+                      />
                       <div className="flex-1 min-w-0">
-                        <h3 className="font-medium truncate">{item.name}</h3>
-                        <p className="text-sm text-muted-foreground truncate">{item.model}</p>
-                        <p className="text-xs text-muted-foreground mt-1 truncate">ID: {item.id}</p>
-                      </div>
-                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                        {getStatusBadge(item.status)}
-                        <p className="text-xs text-muted-foreground text-right whitespace-nowrap">
-                          Exp: {new Date(item.warrantyExpiry).toLocaleDateString('en-US', { 
-                            month: 'short', 
-                            day: 'numeric', 
-                            year: '2-digit' 
-                          })}
-                        </p>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex-1 min-w-0">
+                            <h3 className="font-medium truncate">{item.name}</h3>
+                            <p className="text-sm text-muted-foreground truncate">{item.model}</p>
+                            <p className="text-xs text-muted-foreground mt-1 truncate">ID: {item.id}</p>
+                          </div>
+                          <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                            {getStatusBadge(item.status)}
+                            <p className="text-xs text-muted-foreground text-right whitespace-nowrap">
+                              Exp: {new Date(item.warrantyExpiry).toLocaleDateString('en-US', { 
+                                month: 'short', 
+                                day: 'numeric', 
+                                year: '2-digit' 
+                              })}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </div>
-              </button>
-            </Card>
-          ))}
+                  </button>
+                </Card>
+              ))
+            )}
           </div>
         )}
       </div>
@@ -760,14 +770,29 @@ export default function Warranty() {
                 <span className="text-sm">{product.category}</span>
               </div>
             </div>
-          </div>
+      </div>
 
-          {product.status === "active" && (
+          {product.status === "active" && !(/inactive|generated/i.test(lookupMessage)) && (
             <Button
               onClick={() => setCurrentStep("claim-form")}
               className="w-full"
             >
               Claim Warranty
+            </Button>
+          )}
+
+          {/* Show Register Warranty CTA when barcode is inactive/generated */}
+          {(!product.purchaseDate ||
+            /inactive|generated/i.test(lookupMessage)) && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                const barcode = product?.serialNumber || warrantyId;
+                navigate(`/warranty/register${barcode ? `?barcode=${encodeURIComponent(barcode)}` : ''}`);
+              }}
+              className="w-full mt-3"
+            >
+              Register Warranty
             </Button>
           )}
         </Card>

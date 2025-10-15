@@ -115,7 +115,9 @@ const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
       errors.email = 'Please enter a valid email address';
     }
 
-    if (formData.phone && !/^\+62\d{8,13}$/.test(formData.phone)) {
+    if (!formData.phone) {
+      errors.phone = 'Phone number is required';
+    } else if (!/^\+62\d{8,13}$/.test(formData.phone)) {
       errors.phone = 'Please enter a valid Indonesian phone number (e.g., +628985276363)';
     }
 
@@ -152,10 +154,10 @@ const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
 
     try {
       await register({
-        firstName: formData.firstName.trim(),
-        lastName: formData.lastName.trim(),
+        first_name: formData.firstName.trim(),
+        last_name: formData.lastName.trim(),
         email: formData.email.trim(),
-        phone: formData.phone.trim() || undefined,
+        phone: formData.phone.trim(),
         password: formData.password,
         acceptTerms: formData.acceptTerms,
         marketingOptIn: formData.marketingOptIn,
@@ -344,13 +346,13 @@ const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="phone">Phone (optional)</Label>
+            <Label htmlFor="phone">Phone</Label>
             <div className="relative">
               <Phone className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
                 id="phone"
                 type="tel"
-                placeholder="08985276363 (will be formatted as +628985276363)"
+                placeholder="08985276363"
                 value={formData.phone}
                 onChange={(e) => handleInputChange('phone', e.target.value)}
                 className={`pl-10 ${validationErrors.phone ? 'border-destructive' : ''}`}

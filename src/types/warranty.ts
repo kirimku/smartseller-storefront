@@ -59,6 +59,23 @@ export interface ValidateBarcodeResponse {
   valid: boolean;
   warranty_barcode?: WarrantyBarcode;
   message: string;
+  // Alternate response shape from API: warranty + product + coverage
+  warranty?: {
+    id: string;
+    barcode_value?: string;
+    barcode?: string;
+    status: 'available' | 'activated' | 'expired' | 'claimed' | string;
+    is_active: boolean;
+    activated_at?: string;
+    expiry_date?: string;
+    days_remaining?: number;
+    warranty_period?: string;
+    is_expired?: boolean;
+    can_claim?: boolean;
+  };
+  product?: CustomerProductInfo;
+  coverage?: CustomerWarrantyCoverage;
+  validation_time?: string;
 }
 
 export interface ActivateWarrantyRequest {

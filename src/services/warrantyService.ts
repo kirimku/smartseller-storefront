@@ -222,18 +222,27 @@ export class WarrantyService {
   /**
    * Register warranty to customer account (Authentication required)
    */
-  async registerWarranty(data: CustomerWarrantyRegistrationRequest): Promise<WarrantyServiceResponse<CustomerWarrantyRegistrationResponse>> {
+  async registerWarranty(data: CustomerWarrantyRegistrationRequest | FormData): Promise<WarrantyServiceResponse<CustomerWarrantyRegistrationResponse>> {
     try {
-      const response = await this.makeRequest<CustomerWarrantyRegistrationResponse>(
-        this.buildWarrantyUrl('warranties/register'),
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(data),
-        }
-      );
+      const url = this.buildWarrantyUrl('warranties/register');
+
+      const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
+
+      const options: RequestInit = {
+        method: 'POST',
+      };
+
+      if (isFormData) {
+        options.body = data as FormData;
+        // Content-Type will be set automatically by the browser for FormData
+      } else {
+        options.headers = {
+          'Content-Type': 'application/json',
+        };
+        options.body = JSON.stringify(data as CustomerWarrantyRegistrationRequest);
+      }
+
+      const response = await this.makeRequest<CustomerWarrantyRegistrationResponse>(url, options);
 
       return {
         success: true,
@@ -569,22 +578,81 @@ export class WarrantyService {
     try {
       // First validate the barcode
       const validationResult = await this.validateBarcode(barcode);
-      
-      if (!validationResult.success || !validationResult.data?.valid) {
+      const data = validationResult.data;
+
+      // If validation call itself failed
+      if (!validationResult.success) {
         return {
           success: false,
-          error: 'Invalid barcode',
-          message: validationResult.data?.message || 'Barcode not found'
+          error: 'Barcode validation failed',
+          message: data?.message || 'Failed to validate barcode'
         };
       }
 
-      // If valid and we have warranty data, convert to product format
-      if (validationResult.data.warranty_barcode) {
-        const product = this.convertBarcodeToProduct(validationResult.data.warranty_barcode);
+      // Handle cases where valid is false but server returns product+warranty details
+      if (data && data.valid === false) {
+        if (data.product && data.warranty) {
+          const product: WarrantyProduct = {
+            id: data.warranty.id,
+            name: data.product.name || 'Unknown Product',
+            model: data.product.model || 'Unknown Model',
+            serialNumber: data.warranty.barcode_value || data.warranty.barcode || barcode,
+            purchaseDate: data.warranty.activated_at || '',
+            warrantyExpiry: data.warranty.expiry_date || '',
+            status: data.warranty.status === 'activated' ? 'active' :
+                    data.warranty.status === 'expired' ? 'expired' :
+                    data.warranty.status === 'claimed' ? 'claimed' : 'active',
+            category: data.product.category || 'Unknown',
+            image: data.product.image_url || '/placeholder.svg',
+            barcodeId: data.warranty.id
+          };
+          return {
+            success: true,
+            data: product,
+            message: data.message || 'Warranty found (inactive)'
+          };
+        }
+
+        // No usable details returned
+        return {
+          success: false,
+          error: 'Invalid barcode',
+          message: data?.message || 'Barcode not found'
+        };
+      }
+
+      // If valid, attempt to map from either warranty_barcode or newer warranty+product shape
+
+      // Preferred: classic shape with warranty_barcode
+      if (data.warranty_barcode) {
+        const product = this.convertBarcodeToProduct(data.warranty_barcode);
         return {
           success: true,
           data: product,
           message: 'Warranty found successfully'
+        };
+      }
+
+      // Alternate shape: product + warranty
+      if (data.product && data.warranty) {
+        const product: WarrantyProduct = {
+          id: data.warranty.id,
+          name: data.product.name || 'Unknown Product',
+          model: data.product.model || 'Unknown Model',
+          serialNumber: data.warranty.barcode_value || data.warranty.barcode || barcode,
+          purchaseDate: data.warranty.activated_at || '',
+          warrantyExpiry: data.warranty.expiry_date || '',
+          status: data.warranty.status === 'activated' ? 'active' :
+                  data.warranty.status === 'expired' ? 'expired' :
+                  data.warranty.status === 'claimed' ? 'claimed' : 'active',
+          category: data.product.category || 'Unknown',
+          image: data.product.image_url || '/placeholder.svg',
+          barcodeId: data.warranty.id
+        };
+        return {
+          success: true,
+          data: product,
+          message: data.message || 'Warranty found successfully'
         };
       }
 
