@@ -15,16 +15,30 @@ const Login: React.FC = () => {
   
   const isVerified = searchParams.get('verified') === 'true';
 
-  // Redirect if already authenticated
+  // Compute intended redirect target (decoded and validated)
+  const redirectTarget = React.useMemo(() => {
+    const raw = searchParams.get('redirect');
+    if (!raw) return null;
+    try {
+      const decoded = decodeURIComponent(raw);
+      return decoded.startsWith('/') ? decoded : null;
+    } catch {
+      return raw.startsWith('/') ? raw : null;
+    }
+  }, [searchParams]);
+
+  // Redirect if already authenticated: honor intended redirect if present
   React.useEffect(() => {
     if (isAuthenticated) {
-      navigate('/profile');
+      const target = redirectTarget || '/profile';
+      navigate(target, { replace: true });
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, redirectTarget, navigate]);
 
   const handleLoginSuccess = () => {
-    // Redirect to profile page after successful login
-    navigate('/profile');
+    // Honor redirect parameter after successful login
+    const target = redirectTarget || '/profile';
+    navigate(target, { replace: true });
   };
 
   const handleSwitchToRegister = () => {

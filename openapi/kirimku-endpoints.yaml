@@ -1,0 +1,881 @@
+paths:
+  /api/v1/kirimku/locations/search:
+    get:
+      summary: Search locations
+      description: Search for locations using query parameters. Supports searching by name, type, and other criteria.
+      tags:
+        - Kirimku
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          description: Search query for location name
+          schema:
+            type: string
+            example: "Jakarta"
+        - name: type
+          in: query
+          required: false
+          description: Type of location to search for
+          schema:
+            type: string
+            enum: ["province", "city", "district", "area"]
+            example: "city"
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+            example: 10
+      responses:
+        '200':
+          description: Locations retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Locations retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      locations:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              example: "JKT001"
+                            name:
+                              type: string
+                              example: "Jakarta Pusat"
+                            type:
+                              type: string
+                              example: "city"
+                            province:
+                              type: string
+                              example: "DKI Jakarta"
+                            postal_code:
+                              type: string
+                              example: "10110"
+                      total:
+                        type: integer
+                        example: 5
+        '400':
+          description: Bad request - Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/kirimku/couriers:
+    get:
+      summary: Get available couriers
+      description: Retrieve list of available couriers for shipping between origin and destination
+      tags:
+        - Kirimku
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: origin_area_id
+          in: query
+          required: true
+          description: Origin area ID
+          schema:
+            type: string
+            example: "JKT001"
+        - name: destination_area_id
+          in: query
+          required: true
+          description: Destination area ID
+          schema:
+            type: string
+            example: "BDG001"
+        - name: weight
+          in: query
+          required: true
+          description: Package weight in grams
+          schema:
+            type: integer
+            minimum: 1
+            example: 1000
+        - name: length
+          in: query
+          required: false
+          description: Package length in cm
+          schema:
+            type: integer
+            minimum: 1
+            example: 20
+        - name: width
+          in: query
+          required: false
+          description: Package width in cm
+          schema:
+            type: integer
+            minimum: 1
+            example: 15
+        - name: height
+          in: query
+          required: false
+          description: Package height in cm
+          schema:
+            type: integer
+            minimum: 1
+            example: 10
+        - name: value
+          in: query
+          required: false
+          description: Package value in rupiah
+          schema:
+            type: integer
+            minimum: 0
+            example: 100000
+        - name: cod
+          in: query
+          required: false
+          description: Cash on delivery flag
+          schema:
+            type: boolean
+            example: false
+        - name: insurance
+          in: query
+          required: false
+          description: Insurance flag
+          schema:
+            type: boolean
+            example: false
+      responses:
+        '200':
+          description: Couriers retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Couriers retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      couriers:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            id:
+                              type: string
+                              example: "jne"
+                            name:
+                              type: string
+                              example: "JNE"
+                            services:
+                              type: array
+                              items:
+                                type: object
+                                properties:
+                                  id:
+                                    type: string
+                                    example: "reg"
+                                  name:
+                                    type: string
+                                    example: "Regular"
+                                  estimated_days:
+                                    type: string
+                                    example: "2-3"
+                      total:
+                        type: integer
+                        example: 3
+        '400':
+          description: Bad request - Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/kirimku/tariff/calculate:
+    post:
+      summary: Calculate shipping tariff
+      description: Calculate shipping cost for a package between origin and destination
+      tags:
+        - Kirimku
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                origin_area_id:
+                  type: string
+                  description: Origin area ID
+                  example: "JKT001"
+                destination_area_id:
+                  type: string
+                  description: Destination area ID
+                  example: "BDG001"
+                weight:
+                  type: integer
+                  description: Package weight in grams
+                  minimum: 1
+                  example: 1000
+                courier_id:
+                  type: string
+                  description: Courier ID
+                  example: "jne"
+                service_id:
+                  type: string
+                  description: Service ID
+                  example: "reg"
+              required:
+                - origin_area_id
+                - destination_area_id
+                - weight
+                - courier_id
+                - service_id
+      responses:
+        '200':
+          description: Tariff calculated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Tariff calculated successfully"
+                  data:
+                    type: object
+                    properties:
+                      couriers:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            courier_id:
+                              type: string
+                              example: "jne"
+                            courier_name:
+                              type: string
+                              example: "JNE"
+                            service_id:
+                              type: string
+                              example: "reg"
+                            service_name:
+                              type: string
+                              example: "Regular"
+                            cost:
+                              type: integer
+                              example: 15000
+                            estimated_days:
+                              type: string
+                              example: "2-3"
+                      total:
+                        type: integer
+                        example: 1
+        '400':
+          description: Bad request - Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/kirimku/bookings:
+    post:
+      summary: Create shipping booking
+      description: Create a new shipping booking with the provided details
+      tags:
+        - Kirimku
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                courier_id:
+                  type: string
+                  description: Courier ID
+                  example: "jne"
+                service_id:
+                  type: string
+                  description: Service ID
+                  example: "reg"
+                origin_area_id:
+                  type: string
+                  description: Origin area ID
+                  example: "JKT001"
+                destination_area_id:
+                  type: string
+                  description: Destination area ID
+                  example: "BDG001"
+                sender:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      example: "John Doe"
+                    phone:
+                      type: string
+                      example: "081234567890"
+                    address:
+                      type: string
+                      example: "Jl. Sudirman No. 1"
+                  required:
+                    - name
+                    - phone
+                    - address
+                receiver:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      example: "Jane Smith"
+                    phone:
+                      type: string
+                      example: "081234567891"
+                    address:
+                      type: string
+                      example: "Jl. Asia Afrika No. 2"
+                  required:
+                    - name
+                    - phone
+                    - address
+                package:
+                  type: object
+                  properties:
+                    weight:
+                      type: integer
+                      description: Package weight in grams
+                      example: 1000
+                    length:
+                      type: integer
+                      description: Package length in cm
+                      example: 20
+                    width:
+                      type: integer
+                      description: Package width in cm
+                      example: 15
+                    height:
+                      type: integer
+                      description: Package height in cm
+                      example: 10
+                    description:
+                      type: string
+                      example: "Electronics"
+                    value:
+                      type: integer
+                      description: Package value in rupiah
+                      example: 100000
+                  required:
+                    - weight
+                    - description
+              required:
+                - courier_id
+                - service_id
+                - origin_area_id
+                - destination_area_id
+                - sender
+                - receiver
+                - package
+      responses:
+        '201':
+          description: Booking created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Booking created successfully"
+                  data:
+                    type: object
+                    properties:
+                      booking:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: "booking_123456"
+                          tracking_number:
+                            type: string
+                            example: "JNE123456789"
+                          status:
+                            type: string
+                            example: "confirmed"
+                          total_amount:
+                            type: integer
+                            example: 15000
+        '400':
+          description: Bad request - Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/kirimku/bookings/{id}:
+    get:
+      summary: Get booking details
+      description: Retrieve details of a specific booking by ID
+      tags:
+        - Kirimku
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Booking ID
+          schema:
+            type: string
+            example: "booking_123456"
+      responses:
+        '200':
+          description: Booking details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Booking details retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      booking:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: "booking_123456"
+                          tracking_number:
+                            type: string
+                            example: "JNE123456789"
+                          status:
+                            type: string
+                            example: "in_transit"
+                          total_amount:
+                            type: integer
+                            example: 15000
+                          created_at:
+                            type: string
+                            format: date-time
+                            example: "2024-01-15T10:30:00Z"
+        '404':
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Update booking
+      description: Update an existing booking with new details
+      tags:
+        - Kirimku
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Booking ID
+          schema:
+            type: string
+            example: "booking_123456"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sender:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      example: "John Doe Updated"
+                    phone:
+                      type: string
+                      example: "081234567890"
+                    address:
+                      type: string
+                      example: "Jl. Sudirman No. 1 Updated"
+                receiver:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                      example: "Jane Smith Updated"
+                    phone:
+                      type: string
+                      example: "081234567891"
+                    address:
+                      type: string
+                      example: "Jl. Asia Afrika No. 2 Updated"
+                package:
+                  type: object
+                  properties:
+                    description:
+                      type: string
+                      example: "Electronics Updated"
+      responses:
+        '200':
+          description: Booking updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Booking updated successfully"
+                  data:
+                    type: object
+                    properties:
+                      booking:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: "booking_123456"
+                          status:
+                            type: string
+                            example: "updated"
+        '404':
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '400':
+          description: Bad request - Invalid input data
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Cancel booking
+      description: Cancel an existing booking
+      tags:
+        - Kirimku
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Booking ID
+          schema:
+            type: string
+            example: "booking_123456"
+      responses:
+        '200':
+          description: Booking cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Booking cancelled successfully"
+                  data:
+                    type: object
+                    properties:
+                      booking:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: "booking_123456"
+                          status:
+                            type: string
+                            example: "cancelled"
+        '404':
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/kirimku/transactions/{id}:
+    get:
+      summary: Get transaction details
+      description: Retrieve details of a specific transaction by ID
+      tags:
+        - Kirimku
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Transaction ID
+          schema:
+            type: string
+            example: "txn_123456"
+      responses:
+        '200':
+          description: Transaction details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Transaction details retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      transaction:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: "txn_123456"
+                          booking_id:
+                            type: string
+                            example: "booking_123456"
+                          amount:
+                            type: integer
+                            example: 15000
+                          status:
+                            type: string
+                            example: "paid"
+                          payment_method:
+                            type: string
+                            example: "bank_transfer"
+                          created_at:
+                            type: string
+                            format: date-time
+                            example: "2024-01-15T10:30:00Z"
+        '404':
+          description: Transaction not found
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/kirimku/invoices/{id}:
+    get:
+      summary: Get invoice details
+      description: Retrieve details of a specific invoice by ID
+      tags:
+        - Kirimku
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Invoice ID
+          schema:
+            type: string
+            example: "inv_123456"
+      responses:
+        '200':
+          description: Invoice details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Invoice details retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      invoice:
+                        type: object
+                        properties:
+                          id:
+                            type: string
+                            example: "inv_123456"
+                          transaction_id:
+                            type: string
+                            example: "txn_123456"
+                          booking_id:
+                            type: string
+                            example: "booking_123456"
+                          amount:
+                            type: integer
+                            example: 15000
+                          tax_amount:
+                            type: integer
+                            example: 1500
+                          total_amount:
+                            type: integer
+                            example: 16500
+                          status:
+                            type: string
+                            example: "issued"
+                          issued_at:
+                            type: string
+                            format: date-time
+                            example: "2024-01-15T10:30:00Z"
+                          due_date:
+                            type: string
+                            format: date-time
+                            example: "2024-01-22T10:30:00Z"
+        '404':
+          description: Invoice not found
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'

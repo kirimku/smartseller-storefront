@@ -182,6 +182,10 @@ export class CustomerService {
         first_name: data.first_name,
         last_name: data.last_name,
         phone: data.phone,
+        ...(data.date_of_birth ? { date_of_birth: data.date_of_birth } : {}),
+        ...(data.gender ? { gender: data.gender } : {}),
+        ...(data.tags ? { tags: data.tags } : {}),
+        ...(data.preferences ? { preferences: data.preferences } : {}),
       };
 
       // Perform registration via storefront API

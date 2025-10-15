@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, ReactNode } from
 import { Customer, customerService, AuthResponse, LoginRequest, RegisterRequest } from '@/services/customerService';
 import { useTenant } from './TenantContext';
 import { useSessionManager } from '@/hooks/useSessionManager';
+import { secureTokenStorage } from '@/services/secureTokenStorage';
 
 // Social login data interface
 export interface SocialLoginData {
@@ -55,7 +56,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  const { tenant, isValidTenant } = useTenant();
+  const { tenant, isValidTenant, slug } = useTenant();
   const tenantId = tenant?.id || null;
 
   // Session management
@@ -77,10 +78,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setIsLoading(true);
         setError(null);
 
-        // Proceed if we have a tenantId; don’t block on isValidTenant
-        if (!tenantId) {
-          setIsLoading(false);
+        // Wait until storefront slug is available before initializing auth
+        // Keep loading state true to prevent premature route guards
+        if (!slug) {
           return;
+        }
+
+        // Ensure customer service has the current storefront slug
+        try {
+          customerService.setStorefrontSlug(slug);
+        } catch (err) {
+          console.warn('Failed to set storefront slug during auth init:', err);
         }
 
         // Initialize customer service with stored token
@@ -117,7 +125,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
 
     initializeAuth();
-  }, [isValidTenant, tenantId]);
+  }, [isValidTenant, slug]);
 
   // Session validation and monitoring
   useEffect(() => {
@@ -172,17 +180,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       setError(null);
 
-      if (!tenantId) {
-        throw new Error('Tenant not available');
+      // Ensure storefront slug is set for the service
+      if (slug) {
+        customerService.setStorefrontSlug(slug);
       }
 
-      // Add tenant context to login request
-      const tenantAwareCredentials = {
-        ...credentials,
-        tenantId,
-      };
-
-      const authResponse: AuthResponse = await customerService.login(tenantAwareCredentials);
+      const authResponse: AuthResponse = await customerService.login(credentials);
       
       setCustomer(authResponse.customer);
       setIsAuthenticated(true);
@@ -224,16 +227,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       setError(null);
 
-      // Store the social login tokens using the secure token storage
-      const authResponse: AuthResponse = {
-        customer: socialLoginData.customer,
-        token: socialLoginData.accessToken,
+      // Persist tokens and customer data via secureTokenStorage
+      const tokenData = {
+        accessToken: socialLoginData.accessToken,
         refreshToken: socialLoginData.refreshToken,
-        expiresIn: socialLoginData.expiresIn,
+        expiresAt: Date.now() + socialLoginData.expiresIn * 1000,
+        tokenType: 'Bearer',
+      };
+      const customerData = {
+        id: socialLoginData.customer.id,
+        email: socialLoginData.customer.email,
+        firstName: socialLoginData.customer.first_name,
+        lastName: socialLoginData.customer.last_name,
+        phone: socialLoginData.customer.phone || '',
+        isEmailVerified: true,
       };
 
-      // Store auth data securely
-      await customerService.storeAuthData(authResponse);
+      await secureTokenStorage.storeTokens(tokenData, customerData);
+
+      // Ensure storefront slug is set for the service and initialize auth
+      if (slug) {
+        customerService.setStorefrontSlug(slug);
+      }
+      await customerService.initializeAuth();
       
       setCustomer(socialLoginData.customer);
       setIsAuthenticated(true);
@@ -275,8 +291,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setIsLoading(true);
       setError(null);
 
-      if (!tenantId) {
-        throw new Error('Tenant not available');
+      // Ensure storefront slug is set for the service
+      if (slug) {
+        customerService.setStorefrontSlug(slug);
       }
 
       // Transform camelCase field names to snake_case for API compatibility
@@ -285,7 +302,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         ...data,
         first_name: dataWithCamelCase.firstName || data.first_name,
         last_name: dataWithCamelCase.lastName || data.last_name,
-        tenantId,
       };
 
       // Remove camelCase fields if they exist
@@ -402,7 +418,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const verifyEmail = async (token: string): Promise<void> => {
     try {
       setError(null);
-      await customerService.verifyEmail(token);
+      await customerService.verifyEmail({ token });
       
       // Refresh customer profile to update verification status
       if (isAuthenticated) {
@@ -419,7 +435,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const resendEmailVerification = async (): Promise<void> => {
     try {
       setError(null);
-      await customerService.resendEmailVerification();
+      if (!customer?.email) {
+        throw new Error('No email available for verification');
+      }
+      await customerService.resendEmailVerification(customer.email);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Failed to resend verification email';
       setError(errorMessage);

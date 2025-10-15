@@ -13,6 +13,7 @@ import { Eye, EyeOff, Mail, Lock, User, Phone, AlertCircle, CheckCircle, Shield 
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
 import { passwordSecurity, type PasswordStrengthResult } from '@/services/passwordSecurity';
 import { handleRegistrationError } from '@/services/errorHandling';
+// Address fields moved to WarrantyRegister; remove AddressPicker from account registration
 
 interface CustomerRegistrationProps {
   onSuccess?: () => void;
@@ -138,6 +139,8 @@ const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
     if (!formData.acceptTerms) {
       errors.acceptTerms = 'You must accept the terms and conditions';
     }
+
+    // Address validation removed from account registration; handled in WarrantyRegister
 
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
@@ -362,7 +365,9 @@ const CustomerRegistration: React.FC<CustomerRegistrationProps> = ({
             {validationErrors.phone && (
               <p className="text-sm text-destructive">{validationErrors.phone}</p>
             )}
-          </div>
+        </div>
+
+          {/* Address inputs removed; these belong to WarrantyRegister now */}
 
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
