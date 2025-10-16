@@ -14,6 +14,19 @@ import {
 } from '@/lib/storefrontApiClient';
 import { secureTokenStorage, type TokenData, type CustomerData } from './secureTokenStorage';
 
+// Safe debug helper to avoid errors when console is unavailable
+function safeDebug(label: string, data?: unknown): void {
+  try {
+    if (data !== undefined) {
+      console.debug(label, data);
+    } else {
+      console.debug(label);
+    }
+  } catch (e) {
+    void e; // no-op to satisfy lint rules
+  }
+}
+
 // Customer Types (extending OpenAPI types)
 export interface Customer extends ApiCustomer {
   addresses?: CustomerAddress[];
@@ -239,34 +252,28 @@ export class CustomerService {
   async refreshToken(): Promise<AuthResponse> {
     try {
       const refreshToken = await this.getStoredRefreshToken();
-      try {
-        console.debug('🔐 Stored refresh token (pre-refresh)', {
-          present: !!refreshToken,
-          preview: refreshToken ? refreshToken.substring(0, 12) + '...' : undefined,
-        });
-      } catch {}
+      safeDebug('🔐 Stored refresh token (pre-refresh)', {
+        present: !!refreshToken,
+        preview: refreshToken ? refreshToken.substring(0, 12) + '...' : undefined,
+      });
       if (!refreshToken) {
         throw new ApiError({ message: 'No refresh token available', status: 401, details: 'UNAUTHORIZED' });
       }
 
-      try {
-        console.debug('🚀 Calling refresh endpoint', {
-          slug: this.getStorefrontSlug(),
-        });
-      } catch {}
+      safeDebug('🚀 Calling refresh endpoint', {
+        slug: this.getStorefrontSlug(),
+      });
 
       const response = await this.apiClient.refreshToken(this.getStorefrontSlug(), refreshToken);
 
-      try {
-        console.debug('✅ Refresh response received', {
-          hasAccessToken: !!response?.access_token,
-          accessTokenPreview: response?.access_token?.substring(0, 12) + '...',
-          hasRefreshToken: !!response?.refresh_token,
-          refreshTokenPreview: response?.refresh_token?.substring(0, 12) + '...',
-          tokenType: response?.token_type,
-          expiresIn: response?.expires_in,
-        });
-      } catch {}
+      safeDebug('✅ Refresh response received', {
+        hasAccessToken: !!response?.access_token,
+        accessTokenPreview: response?.access_token?.substring(0, 12) + '...',
+        hasRefreshToken: !!response?.refresh_token,
+        refreshTokenPreview: response?.refresh_token?.substring(0, 12) + '...',
+        tokenType: response?.token_type,
+        expiresIn: response?.expires_in,
+      });
 
       // Store new tokens
       const tokenData: TokenData = {
@@ -278,19 +285,17 @@ export class CustomerService {
 
       const customerData = secureTokenStorage.getCustomerData();
       if (customerData) {
-        try {
-          console.debug('💾 Persisting refreshed tokens with customer data', {
-            customerId: customerData.id,
-          });
-        } catch {}
+        safeDebug('💾 Persisting refreshed tokens with customer data', {
+          customerId: customerData.id,
+        });
         await secureTokenStorage.storeTokens(tokenData, customerData);
       } else {
         // Fallback: persist access token in secure storage even without customer data
         // This ensures the app has a usable access token after refresh on reload
-        try {
-          console.debug('💾 Fallback: updating access token only (no customer data)');
-        } catch {}
+        safeDebug('💾 Fallback: updating access token only (no customer data)');
         secureTokenStorage.updateAccessToken(tokenData.accessToken, tokenData.expiresAt);
+        // Persist rotated refresh token even in fallback path
+        await secureTokenStorage.updateRefreshToken(tokenData.refreshToken);
       }
 
       // Update API client with new access token
@@ -308,9 +313,7 @@ export class CustomerService {
       return authResponse;
     } catch (error) {
       console.error('Token refresh failed:', error);
-      try {
-        console.debug('🧯 Refresh failure handling: clearing auth data');
-      } catch {}
+      safeDebug('🧯 Refresh failure handling: clearing auth data');
       this.clearAuthData();
       if (error instanceof ApiError) {
         throw error;

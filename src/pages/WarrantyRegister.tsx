@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { BarcodeScanner } from "@/components/common/BarcodeScanner";
 import { warrantyService } from "@/services/warrantyService";
-import AddressPicker, { type AddressPickerValue } from "@/components/common/AddressPicker";
 import { Loader2, ArrowLeft, Upload, QrCode, CheckCircle } from "lucide-react";
 
 /**
@@ -19,6 +18,7 @@ import { Loader2, ArrowLeft, Upload, QrCode, CheckCircle } from "lucide-react";
  * - New dedicated URL: /warranty/register
  * - Focused flow: scan/enter barcode, minimal customer details, invoice upload
  * - Product details are not shown; derived from barcode validation
+ * - Location/address removed - only needed for claims
  */
 const WarrantyRegister: React.FC = () => {
   const navigate = useNavigate();
@@ -27,14 +27,6 @@ const WarrantyRegister: React.FC = () => {
   // Form state
   const [barcode, setBarcode] = useState<string>(searchParams.get("barcode") || "");
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
-  // Address fields
-  const [addressLocation, setAddressLocation] = useState<AddressPickerValue | null>(null);
-  const [addressLine1, setAddressLine1] = useState<string>("");
-  const [addressLine2, setAddressLine2] = useState<string>("");
-  const [city, setCity] = useState<string>("");
-  const [state, setStateVal] = useState<string>("");
-  const [postalCode, setPostalCode] = useState<string>("");
-  const [country, setCountry] = useState<string>("ID");
 
   // Derived from validation
   const [productSku, setProductSku] = useState<string>("");
@@ -117,19 +109,8 @@ const WarrantyRegister: React.FC = () => {
   }, [barcode]);
 
   const isFormValid = useMemo(() => {
-    const resolvedState = state || addressLocation?.province || "";
-    const resolvedPostal = postalCode || addressLocation?.postalCode || "";
-    const resolvedCity = city || addressLocation?.locationName || "";
-    return (
-      !!barcode &&
-      !!serialNumber &&
-      !!addressLine1 &&
-      !!resolvedCity &&
-      !!resolvedState &&
-      !!resolvedPostal &&
-      !!country
-    );
-  }, [barcode, serialNumber, addressLine1, city, state, postalCode, country, addressLocation]);
+    return !!barcode && !!serialNumber;
+  }, [barcode, serialNumber]);
 
   const handleScanResult = (code: string) => {
     setBarcode(code);
@@ -190,28 +171,22 @@ const WarrantyRegister: React.FC = () => {
         formData.append("invoice_file", invoiceFile);
       }
 
-      // Build customer_info with address moved from general registration
+      // Build minimal customer_info without address (address only needed for claims)
+      const userRecord = user as unknown as Record<string, unknown>;
       const customerInfo = {
-        first_name: user?.firstName || "",
-        last_name: user?.lastName || "",
-        email: user?.email || "",
-        phone_number: user?.phone || "",
-        address: {
-          street: addressLine1 + (addressLine2 ? ` ${addressLine2}` : ""),
-          city: city || addressLocation?.locationName || "",
-          state: state || addressLocation?.province || "",
-          postal_code: postalCode || addressLocation?.postalCode || "",
-          country: country || "ID",
-        },
+        first_name: (userRecord?.first_name as string) || (userRecord?.firstName as string) || "",
+        last_name: (userRecord?.last_name as string) || (userRecord?.lastName as string) || "",
+        email: (userRecord?.email as string) || "",
+        phone_number: (userRecord?.phone_number as string) || (userRecord?.phone as string) || "",
       };
 
       formData.append("customer_info", JSON.stringify(customerInfo));
 
       const res = await warrantyService.registerWarranty(formData);
       if (res.success && res.data) {
-        setSuccessMessage("Warranty registered successfully");
+        setSuccessMessage("Warranty registered successfully! Admin will verify and activate it.");
         // Navigate back to warranties list after short delay
-        setTimeout(() => navigate("/warranty"), 800);
+        setTimeout(() => navigate("/warranty"), 1500);
       } else {
         setError(res.error || res.message || "Failed to register warranty");
       }
@@ -237,6 +212,10 @@ const WarrantyRegister: React.FC = () => {
 
         <Card className="p-6">
           <h2 className="text-2xl font-bold mb-2">Register New Product</h2>
+          <p className="text-muted-foreground mb-4">
+            Register your product for warranty coverage. Admin will verify and activate your warranty.
+          </p>
+          
           {/* Display validated product warranty details at the top */}
           {validatedDetails && (
             <div className="mb-4">
@@ -276,7 +255,7 @@ const WarrantyRegister: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <Label htmlFor="barcode">Barcode</Label>
+                <Label htmlFor="barcode">Barcode *</Label>
                 <div className="flex gap-2 mt-1">
                   <Input
                     id="barcode"
@@ -285,86 +264,8 @@ const WarrantyRegister: React.FC = () => {
                     onChange={(e) => setBarcode(e.target.value)}
                   />
                   <Button type="button" variant="secondary" onClick={() => setIsScanning(true)}>
-                    <QrCode className="h-4 w-4 mr-2" /> Scan Barcode
+                    <QrCode className="h-4 w-4 mr-2" /> Scan
                   </Button>
-                </div>
-              </div>
-            </div>
-
-            <Separator className="my-2" />
-
-            {/* Customer Address Section */}
-            <div className="space-y-2">
-              <h3 className="text-lg font-semibold">Customer Address</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="md:col-span-2">
-                  <AddressPicker
-                    label="Location"
-                    placeholder="Search city, district, area..."
-                    value={addressLocation || undefined}
-                    onChange={(val) => setAddressLocation(val)}
-                    className="mt-1"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="addressLine1">Street address</Label>
-                  <Input
-                    id="addressLine1"
-                    placeholder="Enter street address"
-                    value={addressLine1}
-                    onChange={(e) => setAddressLine1(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="addressLine2">Address line 2 (optional)</Label>
-                  <Input
-                    id="addressLine2"
-                    placeholder="Apartment, suite, unit"
-                    value={addressLine2}
-                    onChange={(e) => setAddressLine2(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="city">City</Label>
-                  <Input
-                    id="city"
-                    placeholder="Enter city"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="state">State/Province</Label>
-                  <Input
-                    id="state"
-                    placeholder="Enter state/province"
-                    value={state}
-                    onChange={(e) => setStateVal(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="postalCode">Postal code</Label>
-                  <Input
-                    id="postalCode"
-                    placeholder="Enter postal code"
-                    value={postalCode}
-                    onChange={(e) => setPostalCode(e.target.value)}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="country">Country</Label>
-                  <Input
-                    id="country"
-                    placeholder="Enter country"
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value)}
-                  />
                 </div>
               </div>
             </div>
@@ -381,6 +282,9 @@ const WarrantyRegister: React.FC = () => {
                   </span>
                 )}
               </div>
+              <p className="text-sm text-muted-foreground mt-1">
+                Upload your purchase invoice for verification
+              </p>
             </div>
 
             {error && (

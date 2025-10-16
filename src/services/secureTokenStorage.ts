@@ -283,6 +283,14 @@ class SecureTokenStorage {
   }
 
   /**
+   * Update refresh token (for rotation scenarios)
+   */
+  public async updateRefreshToken(refreshToken: string): Promise<void> {
+    await this.storeEncryptedRefreshToken(refreshToken);
+    this.dispatchTokenUpdateEvent();
+  }
+
+  /**
    * Get token fingerprint for security validation
    */
   public getTokenFingerprint(): string | null {
@@ -328,8 +336,14 @@ class SecureTokenStorage {
    */
   private shouldEnableFingerprintValidation(): boolean {
     try {
-      const disableEnv = (import.meta as any)?.env?.VITE_DISABLE_FINGERPRINT_VALIDATION;
-      const isDevEnv = (import.meta as any)?.env?.DEV === true;
+      const env = ((import.meta as unknown) as {
+        env?: {
+          VITE_DISABLE_FINGERPRINT_VALIDATION?: string;
+          DEV?: boolean;
+        };
+      }).env || {};
+      const disableEnv = env.VITE_DISABLE_FINGERPRINT_VALIDATION;
+      const isDevEnv = env.DEV === true;
       const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
       const isLocalHost = hostname === 'localhost' || hostname === '127.0.0.1';
 
@@ -338,7 +352,7 @@ class SecureTokenStorage {
         return false;
       }
       return true;
-    } catch {
+    } catch (e) {
       // Default to enabled if environment detection fails
       return true;
     }
@@ -354,7 +368,9 @@ class SecureTokenStorage {
           hasFingerprint: !!this.currentDeviceFingerprint,
           jsonLength: JSON.stringify(customerData).length,
         });
-      } catch {}
+      } catch (e) {
+        // Ignore logging errors
+      }
       const encryptedData = await this.encryptSecureItem(
         JSON.stringify(customerData),
         this.currentDeviceFingerprint || undefined
@@ -362,7 +378,9 @@ class SecureTokenStorage {
       localStorage.setItem('customer_secure', encryptedData);
       try {
         console.debug('📝 customer_secure bytes', { length: encryptedData.length });
-      } catch {}
+      } catch (e) {
+        // Ignore logging errors
+      }
     } catch (error) {
       console.error('❌ Failed to store customer data:', error);
       throw error;
@@ -379,7 +397,9 @@ class SecureTokenStorage {
           hasFingerprint: !!this.currentDeviceFingerprint,
           tokenPreview: refreshToken?.substring(0, 12) + '...'
         });
-      } catch {}
+      } catch (e) {
+        // Ignore logging errors
+      }
       const encryptedToken = await this.encryptSecureItem(
         refreshToken,
         this.currentDeviceFingerprint || undefined
@@ -389,7 +409,9 @@ class SecureTokenStorage {
         console.debug('📝 rt_secure bytes', {
           length: encryptedToken.length
         });
-      } catch {}
+      } catch (e) {
+        // Ignore logging errors
+      }
     } catch (error) {
       console.error('❌ Failed to store refresh token:', error);
       throw error;
@@ -502,8 +524,26 @@ class SecureTokenStorage {
    */
   private async decryptSecureItem(encryptedItem: string): Promise<SecureStorageItem | null> {
     try {
-      try { console.debug('🔍 decryptSecureItem: input length', encryptedItem?.length); } catch {}
-      const secureItem: SecureStorageItem = JSON.parse(encryptedItem);
+      try { console.debug('🔍 decryptSecureItem: input length', encryptedItem?.length); } catch (e) {
+        // Ignore logging errors
+      }
+      const parsed: unknown = JSON.parse(encryptedItem);
+      if (!parsed || typeof parsed !== 'object') {
+        console.error('❌ Invalid secure item format');
+        return null;
+      }
+      const secureItem = parsed as Partial<SecureStorageItem>;
+      // Validate required fields before using
+      if (
+        typeof secureItem.data !== 'string' ||
+        typeof secureItem.iv !== 'string' ||
+        typeof secureItem.salt !== 'string' ||
+        typeof secureItem.hmac !== 'string' ||
+        typeof secureItem.timestamp !== 'number'
+      ) {
+        console.error('❌ Invalid secure item fields');
+        return null;
+      }
       try {
         console.debug('🔍 decryptSecureItem: parsed meta', {
           hasData: !!secureItem?.data,
@@ -512,7 +552,9 @@ class SecureTokenStorage {
           ts: secureItem?.timestamp,
           hasFingerprint: !!secureItem?.deviceFingerprint
         });
-      } catch {}
+      } catch (e) {
+        // Ignore logging errors
+      }
       
       // Verify HMAC integrity
       const hmacData = secureItem.data + secureItem.iv + secureItem.salt + secureItem.timestamp;
@@ -522,7 +564,9 @@ class SecureTokenStorage {
         console.error('❌ HMAC verification failed - data may be tampered');
         return null;
       }
-      try { console.debug('✅ HMAC verification succeeded'); } catch {}
+      try { console.debug('✅ HMAC verification succeeded'); } catch (e) {
+        // Ignore logging errors
+      }
 
       // Derive key from master key and salt
       const salt = CryptoJS.enc.Hex.parse(secureItem.salt);
@@ -544,12 +588,19 @@ class SecureTokenStorage {
         console.error('❌ Decryption failed - invalid data');
         return null;
       }
-      try { console.debug('🔓 decryptSecureItem: decrypted length', decryptedData.length); } catch {}
+      try { console.debug('🔓 decryptSecureItem: decrypted length', decryptedData.length); } catch (e) {
+        // Ignore logging errors
+      }
 
-      return {
-        ...secureItem,
-        data: decryptedData
+      const finalized: SecureStorageItem = {
+        data: decryptedData,
+        iv: secureItem.iv,
+        salt: secureItem.salt,
+        hmac: secureItem.hmac,
+        timestamp: secureItem.timestamp,
+        deviceFingerprint: secureItem.deviceFingerprint,
       };
+      return finalized;
     } catch (error) {
       console.error('❌ Failed to decrypt secure item:', error);
       return null;

@@ -123,6 +123,17 @@ export interface SubmitClaimRequest {
   customer_phone?: string;
   customer_address?: string;
   priority?: 'low' | 'medium' | 'high' | 'urgent';
+  // Enhanced claim fields
+  courier_type?: string;
+  logistic_service?: string;
+  payment_method?: string;
+  address_details?: {
+    street: string;
+    city: string;
+    state: string;
+    postal_code: string;
+    country: string;
+  };
 }
 
 export interface SubmitClaimResponse {

@@ -54,13 +54,13 @@ class TokenExpirationMonitor {
   private constructor(config: Partial<MonitorConfig> = {}) {
     this.config = {
       warningThreshold: 15, // 15 minutes
-      criticalThreshold: 5, // 5 minutes
-      checkInterval: 30000, // 30 seconds
+      criticalThreshold: 4, // 4 minutes
+      checkInterval: 60000, // 60 seconds
       enableAudioAlerts: true,
       enableVisualAlerts: true,
       enableBrowserNotifications: true,
       autoRefreshEnabled: true,
-      autoRefreshThreshold: 10, // 10 minutes
+      autoRefreshThreshold: 6, // 6 minutes (reduce frequency)
       ...config
     };
 

@@ -340,6 +340,10 @@ class JWTTokenManager {
             deviceValidation,
             rotated: response.data.refresh_token !== refreshToken
           });
+          // If refresh token rotated, persist immediately to prevent stale use
+          if (response.data.refresh_token && response.data.refresh_token !== refreshToken) {
+            await secureTokenStorage.updateRefreshToken(response.data.refresh_token);
+          }
           return true;
         } else {
           throw new Error(response.message || 'Token refresh failed');
@@ -398,7 +402,9 @@ class JWTTokenManager {
         slug,
         refreshTokenPreview: `${refreshToken.substring(0, 12)}...`,
       });
-    } catch {}
+    } catch (e) {
+      // Ignore logging errors
+    }
 
     const response = await fetch(url, {
       method: 'POST',
@@ -441,6 +447,8 @@ class JWTTokenManager {
     } else {
       // Fallback: update access token when customer data is not available
       secureTokenStorage.updateAccessToken(tokenData.accessToken, tokenData.expiresAt);
+      // Persist rotated refresh token to ensure next refresh uses latest token
+      await secureTokenStorage.updateRefreshToken(tokenData.refreshToken);
     }
 
     // Notify other tabs about token update

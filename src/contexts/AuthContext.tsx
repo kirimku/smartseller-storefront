@@ -3,6 +3,7 @@ import { Customer, customerService, AuthResponse, LoginRequest, RegisterRequest 
 import { useTenant } from './TenantContext';
 import { useSessionManager } from '@/hooks/useSessionManager';
 import { secureTokenStorage } from '@/services/secureTokenStorage';
+import { jwtTokenManager } from '@/services/jwtTokenManager';
 
 // Social login data interface
 export interface SocialLoginData {
@@ -159,20 +160,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
   }, [isAuthenticated]);
 
-  // Auto-refresh token before expiration
+  // Periodic validation: refresh only when needed
   useEffect(() => {
     if (!isAuthenticated) return;
 
-    const refreshInterval = setInterval(async () => {
+    const interval = setInterval(async () => {
       try {
-        await customerService.refreshToken();
+        // Quick pre-check to avoid work when far from expiry
+        if (!secureTokenStorage.isTokenExpiringSoon()) {
+          return;
+        }
+        // Centralized validator handles refresh if required
+        await jwtTokenManager.validateAndRefreshIfNeeded();
       } catch (error) {
-        console.warn('Token refresh failed:', error);
+        console.warn('Token validation/refresh failed:', error);
         await logout();
       }
-    }, 15 * 60 * 1000); // Refresh every 15 minutes
+    }, 10 * 60 * 1000); // Validate every 10 minutes
 
-    return () => clearInterval(refreshInterval);
+    return () => clearInterval(interval);
   }, [isAuthenticated]);
 
   const login = async (credentials: LoginRequest): Promise<void> => {

@@ -83,30 +83,29 @@ class TokenRefreshInterceptor {
   private async interceptedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
     const url = typeof input === 'string' ? input : input.toString();
     const options = { ...init };
+    const skipByHeader = this.shouldSkipByHeader(options);
 
-    // Skip interception for excluded endpoints
-    if (this.shouldSkipInterception(url)) {
+    // Skip interception when explicitly requested via header or for excluded endpoints
+    if (skipByHeader || this.shouldSkipInterception(url)) {
       return this.originalFetch(input, options);
     }
 
     // Add authorization header if token exists
-    await this.addAuthorizationHeader(options);
+    await this.addAuthorizationHeader(options, url);
 
     try {
       let response = await this.originalFetch(input, options);
 
-      // Handle 401 responses: attempt refresh even if Authorization was missing,
-      // as long as we have a refresh token available (startup race scenario)
+      // Handle 401 responses: attempt refresh only when Authorization header was present
       if (response.status === 401 && !this.shouldSkipInterception(url)) {
         const hadAuthHeader = this.hasAuthorizationHeader(options);
-        const hasRefreshToken = await this.hasRefreshTokenAvailable();
-
-        if (hadAuthHeader || hasRefreshToken) {
-          console.log('🔄 Received 401, attempting token refresh (hadAuth:', hadAuthHeader, 'hasRT:', hasRefreshToken, ')');
+        
+        if (hadAuthHeader) {
+          console.log('🔄 Received 401 on authorized request, attempting token refresh');
           const refreshed = await this.handleTokenRefresh();
           if (refreshed) {
             // Update authorization header with new token and retry
-            await this.addAuthorizationHeader(options);
+            await this.addAuthorizationHeader(options, url);
             response = await this.originalFetch(input, options);
           }
         }
@@ -129,22 +128,36 @@ class TokenRefreshInterceptor {
   /**
    * Add authorization header to request
    */
-  private async addAuthorizationHeader(options: RequestInit): Promise<void> {
+  private async addAuthorizationHeader(options: RequestInit, url?: string): Promise<void> {
     const accessToken = secureTokenStorage.getAccessToken();
     const existingHeaders = (options.headers as Record<string, string>) || {};
     const hasAuthHeader = 'Authorization' in existingHeaders || 'authorization' in existingHeaders;
 
-    // Only add Authorization if none is present.
-    // This preserves explicit headers like refresh-token Authorization.
-    if (accessToken && !hasAuthHeader) {
+    // If the request already has Authorization, normalize and update it
+    if (hasAuthHeader) {
+      const normalizedHeaders = { ...existingHeaders };
+      if ('authorization' in normalizedHeaders) {
+        delete (normalizedHeaders as Record<string, string>)['authorization'];
+      }
+      if (accessToken) {
+        normalizedHeaders['Authorization'] = `Bearer ${accessToken}`;
+      }
+      options.headers = normalizedHeaders;
+      return;
+    }
+
+    // Inject Authorization for non-excluded endpoints when token exists
+    const isExcluded = url ? this.shouldSkipInterception(url) : false;
+    if (accessToken && !isExcluded) {
       options.headers = {
         ...existingHeaders,
-        'Authorization': `Bearer ${accessToken}`
+        Authorization: `Bearer ${accessToken}`
       };
-    } else {
-      // Keep headers unchanged if Authorization already set
-      options.headers = existingHeaders;
+      return;
     }
+
+    // Leave headers unchanged for excluded endpoints
+    options.headers = existingHeaders;
   }
 
   /**
@@ -153,6 +166,19 @@ class TokenRefreshInterceptor {
   private hasAuthorizationHeader(options: RequestInit): boolean {
     const headers = options.headers as Record<string, string> || {};
     return 'Authorization' in headers || 'authorization' in headers;
+  }
+
+  /**
+   * Check if request explicitly opts out of interception via header
+   */
+  private shouldSkipByHeader(options?: RequestInit): boolean {
+    try {
+      const headers = (options?.headers as Record<string, string>) || {};
+      const flag = headers['X-Skip-Intercept'] || headers['x-skip-intercept'];
+      return !!flag;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -338,6 +364,7 @@ class AxiosStyleInterceptor {
   public async responseInterceptor(response: Response, originalRequest: RequestInit & { url?: string }): Promise<Response> {
     // Handle 401 responses
     if (response.status === 401 && originalRequest.url && !this.isExcludedEndpoint(originalRequest.url)) {
+      // Avoid redundant refresh if a refresh is in progress elsewhere
       const refreshed = await jwtTokenManager.refreshToken();
       
       if (refreshed && originalRequest.url) {

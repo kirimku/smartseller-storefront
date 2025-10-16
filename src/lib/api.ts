@@ -46,6 +46,7 @@ export interface RequestOptions {
   timeout?: number;
   retries?: number;
   requiresAuth?: boolean;
+  tenantConfig?: TenantAwareRequestConfig;
 }
 
 // Base API Client Class
@@ -164,11 +165,30 @@ export class SmartSellerApiClient {
       }
     }
 
+    // For explicitly public endpoints, ensure we do not attach any Authorization header
+    const explicitlyMarkedPublic = Object.prototype.hasOwnProperty.call(options, 'requiresAuth') && !requiresAuth;
+    if (explicitlyMarkedPublic) {
+      delete requestHeaders['Authorization'];
+      // Also remove lowercase variant if present
+      // Some code paths may accidentally set 'authorization' (lowercase)
+      // Ensure both are stripped for public calls
+      // eslint-disable-next-line @typescript-eslint/no-dynamic-delete
+      delete (requestHeaders as Record<string, string>)['authorization'];
+    }
+
     const requestOptions: RequestInit = {
       method,
       headers: requestHeaders,
       body: body ? JSON.stringify(body) : undefined,
     };
+
+    // Avoid unnecessary preflight: remove Content-Type for GET without body
+    if (requestOptions.method === 'GET' && !requestOptions.body) {
+      const hdrs = requestOptions.headers as Record<string, string>;
+      if (hdrs && hdrs['Content-Type']) {
+        delete hdrs['Content-Type'];
+      }
+    }
 
     let lastError: Error;
 
