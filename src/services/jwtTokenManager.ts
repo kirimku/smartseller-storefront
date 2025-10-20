@@ -37,7 +37,9 @@ interface TokenRefreshResponse {
   data?: {
     access_token: string;
     refresh_token: string;
-    token_expiry: string;
+    token_expiry?: string;
+    expires_in?: number;
+    token_type?: string;
   };
   message?: string;
 }
@@ -423,7 +425,34 @@ class JWTTokenManager {
       throw new Error(errorData.message || `HTTP ${response.status}: ${response.statusText}`);
     }
 
-    return await response.json();
+    const raw = await response.json();
+
+    // Normalize varying server response shapes
+    // Shape A: { success: true, data: { access_token, refresh_token, token_expiry, expires_in? } }
+    // Shape B: { access_token, refresh_token, token_type, expires_in, token_expiry? }
+    if (typeof raw.success === 'boolean') {
+      return raw as TokenRefreshResponse;
+    }
+
+    if (raw && (raw.access_token || raw.refresh_token)) {
+      const normalized: TokenRefreshResponse = {
+        success: true,
+        data: {
+          access_token: raw.access_token,
+          refresh_token: raw.refresh_token,
+          token_expiry: raw.token_expiry,
+          expires_in: typeof raw.expires_in === 'number' ? raw.expires_in : undefined,
+          token_type: raw.token_type,
+        },
+      };
+      return normalized;
+    }
+
+    // Fallback
+    return {
+      success: false,
+      message: 'Unexpected refresh response format',
+    };
   }
 
   /**
@@ -432,12 +461,45 @@ class JWTTokenManager {
   private async handleSuccessfulRefresh(data: TokenRefreshResponse['data']): Promise<void> {
     if (!data) return;
 
+    // Compute a robust expiresAt timestamp
+    let expiresAt: number | null = null;
+
+    // 1) Prefer explicit token_expiry timestamp from server, if present
+    if (data.token_expiry) {
+      const parsed = Date.parse(data.token_expiry);
+      if (!isNaN(parsed)) {
+        expiresAt = parsed;
+      }
+    }
+
+    // 2) Fallback to JWT exp claim
+    if (!expiresAt) {
+      try {
+        const claims = decodeJwt(data.access_token) as JWTClaims;
+        if (claims.exp) {
+          expiresAt = claims.exp * 1000; // seconds -> ms
+        }
+      } catch (e) {
+        // Ignore decode errors; we'll try the next strategy
+      }
+    }
+
+    // 3) Fallback to expires_in (seconds) when provided
+    if (!expiresAt && typeof data.expires_in === 'number') {
+      expiresAt = Date.now() + (data.expires_in * 1000);
+    }
+
+    // 4) Final safety fallback: 1 hour from now
+    if (!expiresAt) {
+      expiresAt = Date.now() + (3600 * 1000);
+    }
+
     const tokenData: TokenData = {
       accessToken: data.access_token,
       refreshToken: data.refresh_token,
       tokenType: 'Bearer',
-      expiresIn: 3600, // Default 1 hour
-      expiresAt: new Date(data.token_expiry).getTime()
+      expiresIn: typeof data.expires_in === 'number' ? data.expires_in : 3600,
+      expiresAt
     };
 
     // Store the new tokens securely

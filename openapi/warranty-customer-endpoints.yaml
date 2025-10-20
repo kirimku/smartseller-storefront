@@ -1,826 +1,4 @@
 paths:
-  # Public Warranty Endpoints (No Authentication Required)
-  /api/v1/public/warranty/validate:
-    post:
-      tags:
-        - Public Warranty
-      summary: Validate warranty barcode
-      description: Validate a warranty barcode and retrieve warranty information without authentication
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ValidateWarrantyRequest'
-      responses:
-        '200':
-          description: Warranty validation successful
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Warranty validation successful"
-                  data:
-                    $ref: '#/components/schemas/WarrantyValidationDTO'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          description: Warranty not found
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  message:
-                    type: string
-                    example: "Warranty barcode not found or invalid"
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  /api/v1/public/warranty/activate:
-    post:
-      tags:
-        - Public Warranty
-      summary: Activate warranty
-      description: Activate a warranty barcode with customer information
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ActivateWarrantyRequest'
-      responses:
-        '200':
-          description: Warranty activated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Warranty activated successfully"
-                  data:
-                    $ref: '#/components/schemas/WarrantyActivationDTO'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          description: Warranty not found
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  message:
-                    type: string
-                    example: "Warranty barcode not found or already activated"
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  # Customer Protected Warranty Endpoints (Authentication Required)
-  /api/v1/storefront/{slug}/warranties/register:
-    post:
-      tags:
-        - Customer Warranty Registration
-      summary: Register warranty to customer account
-      description: Register a warranty barcode to the authenticated customer's account for a specific storefront
-      security:
-        - CustomerAuth: []
-      parameters:
-        - name: slug
-          in: path
-          required: true
-          description: Storefront slug identifier
-          schema:
-            type: string
-            pattern: '^[a-z0-9-]+$'
-            example: "rexus"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CustomerWarrantyRegistrationRequest'
-      responses:
-        '201':
-          description: Warranty registered successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CustomerWarrantyRegistrationResponse'
-        '400':
-          description: Bad request - Invalid barcode or registration data
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CustomerWarrantyErrorResponse'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: Forbidden - Warranty already registered or belongs to different storefront
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CustomerWarrantyErrorResponse'
-        '404':
-          description: Warranty barcode not found
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/CustomerWarrantyErrorResponse'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  /api/v1/storefront/{slug}/warranties:
-    get:
-      tags:
-        - Customer Warranty Management
-      summary: Get customer warranties
-      description: Retrieve all warranties associated with the authenticated customer for a specific storefront
-      security:
-        - CustomerAuth: []
-      parameters:
-        - name: slug
-          in: path
-          required: true
-          description: Storefront slug identifier
-          schema:
-            type: string
-            pattern: '^[a-z0-9-]+$'
-            example: "rexus"
-        - name: page
-          in: query
-          description: Page number (1-based)
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: limit
-          in: query
-          description: Number of items per page
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 50
-            default: 10
-        - name: status
-          in: query
-          description: Filter by warranty status
-          schema:
-            type: string
-            enum: [active, expired, claimed]
-        - name: product_name
-          in: query
-          description: Search by product name
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Customer warranties retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Customer warranties retrieved successfully"
-                  data:
-                    type: object
-                    properties:
-                      warranties:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/CustomerWarrantyDTO'
-                      pagination:
-                        $ref: '#/components/schemas/PaginationMeta'
-                      summary:
-                        $ref: '#/components/schemas/CustomerWarrantySummaryDTO'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  /api/v1/storefront/{slug}/warranties/{id}:
-    get:
-      tags:
-        - Customer Warranty Management
-      summary: Get warranty details
-      description: Retrieve detailed information about a specific warranty for a specific storefront
-      security:
-        - CustomerAuth: []
-      parameters:
-        - name: slug
-          in: path
-          required: true
-          description: Storefront slug identifier
-          schema:
-            type: string
-            pattern: '^[a-z0-9-]+$'
-            example: "rexus"
-        - name: id
-          in: path
-          required: true
-          description: Warranty ID
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Warranty details retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Warranty details retrieved successfully"
-                  data:
-                    $ref: '#/components/schemas/CustomerWarrantyDetailDTO'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: Forbidden - Warranty does not belong to customer
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  message:
-                    type: string
-                    example: "You don't have access to this warranty"
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  # Warranty Claims Management
-  # NOTE: The following warranty claims endpoints are documented but NOT YET IMPLEMENTED
-  # They are planned for future development. Only the warranty management endpoints above are currently implemented.
-  /api/v1/customer/protected/warranties/{id}/claims:
-    post:
-      tags:
-        - Customer Warranty Claims
-      summary: Submit warranty claim
-      description: Submit a new warranty claim for a specific warranty
-      security:
-        - CustomerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Warranty ID
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/SubmitClaimRequest'
-      responses:
-        '201':
-          description: Warranty claim submitted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Warranty claim submitted successfully"
-                  data:
-                    $ref: '#/components/schemas/CustomerClaimDTO'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: Forbidden - Warranty expired or already claimed
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  message:
-                    type: string
-                    example: "Warranty has expired or already has an active claim"
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  /api/v1/customer/protected/claims:
-    get:
-      tags:
-        - Customer Warranty Claims
-      summary: Get customer claims
-      description: Retrieve all warranty claims submitted by the authenticated customer
-      security:
-        - CustomerAuth: []
-      parameters:
-        - name: page
-          in: query
-          description: Page number (1-based)
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: page_size
-          in: query
-          description: Number of items per page
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 50
-            default: 20
-        - name: status
-          in: query
-          description: Filter by claim status
-          schema:
-            type: string
-            enum: [pending, validated, in_progress, completed, rejected, cancelled]
-        - name: created_from
-          in: query
-          description: Filter by creation date (from)
-          schema:
-            type: string
-            format: date
-        - name: created_to
-          in: query
-          description: Filter by creation date (to)
-          schema:
-            type: string
-            format: date
-      responses:
-        '200':
-          description: Customer claims retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Customer claims retrieved successfully"
-                  data:
-                    type: object
-                    properties:
-                      claims:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/CustomerClaimDTO'
-                      pagination:
-                        $ref: '#/components/schemas/PaginationMeta'
-                      summary:
-                        $ref: '#/components/schemas/CustomerClaimSummaryDTO'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  /api/v1/customer/protected/claims/{id}:
-    get:
-      tags:
-        - Customer Warranty Claims
-      summary: Get claim details
-      description: Retrieve detailed information about a specific warranty claim
-      security:
-        - CustomerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Claim ID
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Claim details retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Claim details retrieved successfully"
-                  data:
-                    $ref: '#/components/schemas/CustomerClaimDetailDTO'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: Forbidden - Claim does not belong to customer
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  message:
-                    type: string
-                    example: "You don't have access to this claim"
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-    put:
-      tags:
-        - Customer Warranty Claims
-      summary: Update claim information
-      description: Update warranty claim information (limited fields for customers)
-      security:
-        - CustomerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Claim ID
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateCustomerClaimRequest'
-      responses:
-        '200':
-          description: Claim updated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Claim updated successfully"
-                  data:
-                    $ref: '#/components/schemas/CustomerClaimDTO'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: Forbidden - Cannot update claim in current status
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  message:
-                    type: string
-                    example: "Cannot update claim in current status"
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  /api/v1/customer/protected/claims/{id}/cancel:
-    post:
-      tags:
-        - Customer Warranty Claims
-      summary: Cancel warranty claim
-      description: Cancel a warranty claim (only allowed for pending/validated claims)
-      security:
-        - CustomerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Claim ID
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CancelClaimRequest'
-      responses:
-        '200':
-          description: Claim cancelled successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Claim cancelled successfully"
-                  data:
-                    $ref: '#/components/schemas/CustomerClaimDTO'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: Forbidden - Cannot cancel claim in current status
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  message:
-                    type: string
-                    example: "Cannot cancel claim in current status"
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  # Claim Attachments
-  /api/v1/customer/protected/claims/{id}/attachments:
-    post:
-      tags:
-        - Customer Warranty Claims
-      summary: Upload claim attachment
-      description: Upload additional attachments to an existing warranty claim
-      security:
-        - CustomerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Claim ID
-          schema:
-            type: string
-            format: uuid
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/UploadAttachmentRequest'
-      responses:
-        '201':
-          description: Attachment uploaded successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Attachment uploaded successfully"
-                  data:
-                    $ref: '#/components/schemas/ClaimAttachmentDTO'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: Forbidden - Cannot add attachments to claim in current status
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  message:
-                    type: string
-                    example: "Cannot add attachments to claim in current status"
-        '413':
-          description: File too large
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  message:
-                    type: string
-                    example: "File size exceeds maximum limit of 10MB"
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  /api/v1/customer/protected/claims/{claim_id}/attachments/{attachment_id}:
-    delete:
-      tags:
-        - Customer Warranty Claims
-      summary: Delete claim attachment
-      description: Delete an attachment from a warranty claim
-      security:
-        - CustomerAuth: []
-      parameters:
-        - name: claim_id
-          in: path
-          required: true
-          description: Claim ID
-          schema:
-            type: string
-            format: uuid
-        - name: attachment_id
-          in: path
-          required: true
-          description: Attachment ID
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Attachment deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Attachment deleted successfully"
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          description: Forbidden - Cannot delete attachments from claim in current status
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  message:
-                    type: string
-                    example: "Cannot delete attachments from claim in current status"
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  # Customer Notifications
-  /api/v1/customer/protected/notifications/warranty:
-    get:
-      tags:
-        - Customer Notifications
-      summary: Get warranty notifications
-      description: Retrieve warranty-related notifications for the authenticated customer
-      security:
-        - CustomerAuth: []
-      parameters:
-        - name: page
-          in: query
-          description: Page number (1-based)
-          schema:
-            type: integer
-            minimum: 1
-            default: 1
-        - name: page_size
-          in: query
-          description: Number of items per page
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 50
-            default: 20
-        - name: unread_only
-          in: query
-          description: Show only unread notifications
-          schema:
-            type: boolean
-            default: false
-        - name: type
-          in: query
-          description: Filter by notification type
-          schema:
-            type: string
-            enum: [warranty_expiring, claim_status_update, claim_approved, claim_rejected]
-      responses:
-        '200':
-          description: Warranty notifications retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Warranty notifications retrieved successfully"
-                  data:
-                    type: object
-                    properties:
-                      notifications:
-                        type: array
-                        items:
-                          $ref: '#/components/schemas/WarrantyNotificationDTO'
-                      pagination:
-                        $ref: '#/components/schemas/PaginationMeta'
-                      unread_count:
-                        type: integer
-                        example: 3
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
-  /api/v1/customer/protected/notifications/warranty/{id}/read:
-    post:
-      tags:
-        - Customer Notifications
-      summary: Mark notification as read
-      description: Mark a specific warranty notification as read
-      security:
-        - CustomerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          description: Notification ID
-          schema:
-            type: string
-            format: uuid
-      responses:
-        '200':
-          description: Notification marked as read successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Notification marked as read"
-        '404':
-          $ref: '#/components/responses/NotFound'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '500':
-          $ref: '#/components/responses/InternalServerError'
-
   # Storefront Customer Warranty Endpoints (Authentication Required)
   /api/v1/storefront/{slug}/warranty/customer/warranties:
     get:
@@ -980,6 +158,242 @@ paths:
                   message:
                     type: string
                     example: "Storefront not found"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/storefront/{slug}/warranty/customer/warranties/upload-proof:
+    post:
+      tags:
+        - Storefront Customer Warranty
+      summary: Upload proof of purchase for warranty registration
+      description: Upload proof of purchase document (receipt, invoice, etc.) for warranty registration
+      security:
+        - CustomerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          description: Storefront slug identifier
+          schema:
+            type: string
+            pattern: '^[a-z0-9-]+$'
+            example: "rexus"
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - file
+                - document_type
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Proof of purchase document file (PDF, JPG, PNG)
+                document_type:
+                  type: string
+                  enum: [receipt, invoice, purchase_order, warranty_card]
+                  description: Type of proof of purchase document
+                  example: "receipt"
+            encoding:
+              file:
+                contentType: application/pdf, image/jpeg, image/png
+      responses:
+        '200':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Proof of purchase uploaded successfully"
+                  data:
+                    $ref: '#/components/schemas/ProofOfPurchaseInfo'
+        '400':
+          description: Bad request - Invalid file or parameters
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Invalid file format or size"
+                  validation_errors:
+                    type: array
+                    items:
+                      type: string
+                    example: ["File size must be less than 10MB", "Only PDF, JPG, PNG files are allowed"]
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden - Customer not authorized for this storefront
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "You are not authorized to upload files for this storefront"
+        '413':
+          description: Payload too large - File size exceeds limit
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "File size exceeds the maximum limit of 10MB"
+        '415':
+          description: Unsupported media type - Invalid file format
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Unsupported file format. Only PDF, JPG, PNG are allowed"
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /api/v1/storefront/{slug}/warranty/customer/warranties/register:
+    post:
+      tags:
+        - Storefront Customer Warranty
+      summary: Register a warranty for a customer
+      description: Register a warranty barcode to a customer account within a specific storefront
+      security:
+        - CustomerAuth: []
+      parameters:
+        - name: slug
+          in: path
+          required: true
+          description: Storefront slug identifier
+          schema:
+            type: string
+            pattern: '^[a-z0-9-]+$'
+            example: "rexus"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerWarrantyRegistrationRequest'
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                barcode:
+                  type: string
+                  description: "Warranty barcode value (product SKU and serial number will be extracted from this)"
+                  example: "WB-2024-001234567"
+                proof_of_purchase:
+                  type: string
+                  format: binary
+                  description: "Invoice or receipt file"
+              required:
+                - barcode
+                - proof_of_purchase
+      responses:
+        '201':
+          description: Warranty registered successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Warranty registered successfully"
+                  data:
+                    $ref: '#/components/schemas/CustomerWarrantyRegistrationResponse'
+        '400':
+          description: Bad request - Invalid request data or warranty cannot be registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Warranty barcode 'WB-2024-001234567' not found"
+                  error:
+                    type: string
+                    example: "registration_failed"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          description: Forbidden - Customer not authorized for this storefront
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Warranty barcode does not belong to this storefront"
+                  error:
+                    type: string
+                    example: "registration_failed"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
+        '409':
+          description: Conflict - Warranty already registered or expired
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Warranty is already registered to another customer"
+                  error:
+                    type: string
+                    example: "registration_failed"
+                  timestamp:
+                    type: string
+                    format: date-time
+                    example: "2024-01-15T10:30:00Z"
         '500':
           $ref: '#/components/responses/InternalServerError'
 
@@ -1152,29 +566,17 @@ components:
     CustomerWarrantyRegistrationRequest:
       type: object
       required:
-        - barcode_value
-        - product_sku
-        - serial_number
-        - purchase_date
-        - retailer_name
-        - customer_info
+        - barcode
+        - proof_of_purchase
       properties:
-        barcode_value:
+        barcode:
           type: string
-          description: "Warranty barcode value"
+          description: "Warranty barcode value (product SKU and serial number will be extracted from this)"
           example: "WB-2024-001234567"
-        product_sku:
-          type: string
-          description: "Product SKU"
-          example: "SKU-PHONE-001"
-        serial_number:
-          type: string
-          description: "Product serial number"
-          example: "SN123456789"
         purchase_date:
           type: string
           format: date-time
-          description: "Date of purchase"
+          description: "Purchase date (optional)"
           example: "2024-01-15T00:00:00Z"
         purchase_price:
           type: number
@@ -1183,7 +585,7 @@ components:
           example: 999.99
         retailer_name:
           type: string
-          description: "Name of the retailer"
+          description: "Name of the retailer (optional)"
           example: "TechStore Inc"
         retailer_address:
           type: string
@@ -1193,8 +595,6 @@ components:
           type: string
           description: "Invoice number (optional)"
           example: "INV-2024-001"
-        customer_info:
-          $ref: '#/components/schemas/CustomerRegistrationInfo'
         proof_of_purchase:
           $ref: '#/components/schemas/ProofOfPurchaseInfo'
 
@@ -1342,16 +742,32 @@ components:
 
     ProofOfPurchaseInfo:
       type: object
+      required:
+        - document_type
       properties:
         document_type:
           type: string
           description: "Type of proof document"
+          enum: [receipt, invoice, purchase_order, warranty_card]
           example: "receipt"
         document_url:
           type: string
           format: uri
-          description: "URL to the proof document"
-          example: "https://example.com/receipts/receipt-123.pdf"
+          description: "URL to the uploaded proof document"
+          example: "https://cloudflare-bucket.com/receipts/receipt-123.pdf"
+        file_name:
+          type: string
+          description: "Original filename of the uploaded document"
+          example: "receipt-123.pdf"
+        file_size:
+          type: integer
+          format: int64
+          description: "File size in bytes"
+          example: 1024000
+        mime_type:
+          type: string
+          description: "MIME type of the uploaded file"
+          example: "application/pdf"
         uploaded_at:
           type: string
           format: date-time

@@ -201,19 +201,46 @@ export default function Warranty() {
   const [registrationSuccess, setRegistrationSuccess] = useState<CustomerWarrantyRegistrationResponse | null>(null);
 
   // Utility function to convert WarrantyBarcode to WarrantyProduct
-  const convertBarcodeToProduct = (barcode: WarrantyBarcode): WarrantyProduct => {
+  type WarrantyBarcodeExtended = WarrantyBarcode & {
+    product?: {
+      id?: string;
+      sku?: string;
+      name?: string;
+      brand?: string;
+      model?: string;
+      category?: string;
+      description?: string;
+      image_url?: string;
+    };
+    barcode_value?: string;
+    barcode?: string;
+    activated_at?: string;
+  };
+
+  const convertBarcodeToProduct = (barcode: WarrantyBarcodeExtended): WarrantyProduct => {
+    const productName = barcode.product_name ?? barcode.product?.name ?? "Unknown Product";
+    const productModel = barcode.product_model ?? barcode.product?.model ?? "Unknown Model";
+    const category = barcode.product_category ?? barcode.product?.category ?? "Unknown";
+    const imageUrl = barcode.product?.image_url ?? "/placeholder.svg";
+    const serialNumber = barcode.barcode_string ?? barcode.barcode_value ?? barcode.barcode ?? "";
+    const purchaseDate = barcode.activation_date ?? barcode.activated_at ?? barcode.created_at ?? "";
+    const warrantyExpiry = barcode.expiry_date ?? "";
+    const rawStatus = barcode.status;
+    const status: "active" | "expired" | "claimed" =
+      rawStatus === "expired" ? "expired" :
+      rawStatus === "claimed" ? "claimed" :
+      "active";
+
     return {
       id: barcode.id,
-      name: barcode.product_name || "Unknown Product",
-      model: barcode.product_model || "Unknown Model",
-      serialNumber: barcode.barcode_string,
-      purchaseDate: barcode.activation_date || barcode.created_at,
-      warrantyExpiry: barcode.expiry_date || "",
-      status: barcode.status === "activated" ? "active" : 
-              barcode.status === "expired" ? "expired" : 
-              barcode.status === "claimed" ? "claimed" : "active",
-      category: barcode.product_category || "Unknown",
-      image: "/placeholder.svg",
+      name: productName,
+      model: productModel,
+      serialNumber,
+      purchaseDate,
+      warrantyExpiry,
+      status,
+      category,
+      image: imageUrl,
       barcodeId: barcode.id
     };
   };

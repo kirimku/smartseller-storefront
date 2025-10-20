@@ -137,18 +137,30 @@ export class WarrantyService {
    * Convert WarrantyBarcode to WarrantyProduct for UI compatibility
    */
   private convertBarcodeToProduct: WarrantyBarcodeToProductConverter = (barcode: WarrantyBarcode): WarrantyProduct => {
+    const product = (barcode as unknown as { product?: { name?: string; model?: string; category?: string; image_url?: string } }).product;
+    const name = product?.name ?? barcode.product_name ?? 'Unknown Product';
+    const model = product?.model ?? barcode.product_model ?? 'Unknown Model';
+    const category = product?.category ?? barcode.product_category ?? 'Unknown';
+    const image = product?.image_url ?? '/placeholder.svg';
+    const serialNumber = barcode.barcode_string ?? (barcode as unknown as { barcode_value?: string }).barcode_value ?? (barcode as unknown as { barcode?: string }).barcode ?? '';
+    const purchaseDate = barcode.activation_date ?? (barcode as unknown as { activated_at?: string }).activated_at ?? barcode.created_at;
+    const warrantyExpiry = barcode.expiry_date ?? '';
+    const rawStatus = barcode.status;
+    const status: 'active' | 'expired' | 'claimed' =
+      rawStatus === 'expired' ? 'expired' :
+      rawStatus === 'claimed' ? 'claimed' :
+      'active';
+
     return {
       id: barcode.id,
-      name: barcode.product_name || 'Unknown Product',
-      model: barcode.product_model || 'Unknown Model',
-      serialNumber: barcode.barcode_string,
-      purchaseDate: barcode.activation_date || barcode.created_at,
-      warrantyExpiry: barcode.expiry_date || '',
-      status: barcode.status === 'activated' ? 'active' : 
-              barcode.status === 'expired' ? 'expired' : 
-              barcode.status === 'claimed' ? 'claimed' : 'active',
-      category: barcode.product_category || 'Unknown',
-      image: '/placeholder.svg', // Default placeholder
+      name,
+      model,
+      serialNumber,
+      purchaseDate,
+      warrantyExpiry,
+      status,
+      category,
+      image,
       barcodeId: barcode.id
     };
   };
@@ -224,7 +236,8 @@ export class WarrantyService {
    */
   async registerWarranty(data: CustomerWarrantyRegistrationRequest | FormData): Promise<WarrantyServiceResponse<CustomerWarrantyRegistrationResponse>> {
     try {
-      const url = this.buildWarrantyUrl('warranties/register');
+      // Use new customer register endpoint (also accepts file upload via multipart)
+      const url = this.buildWarrantyUrl('warranty/customer/warranties/register');
 
       const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
 
@@ -255,6 +268,46 @@ export class WarrantyService {
         success: false,
         error: error instanceof ApiError ? error.message : 'Warranty registration failed',
         message: 'Failed to register warranty'
+      };
+    }
+  }
+
+  /**
+   * Upload proof of purchase for warranty registration (invoice, receipt, etc.)
+   */
+  async uploadProofOfPurchase(
+    warrantyId: string,
+    file: File,
+    documentType: 'receipt' | 'invoice' | 'purchase_order' | 'warranty_card' = 'invoice'
+  ): Promise<WarrantyServiceResponse<import('@/types/warranty').ProofOfPurchaseInfo>> {
+    try {
+      const formData = new FormData();
+      // Backend expects 'proof_of_purchase' as the file field and a 'warranty_id'
+      formData.append('proof_of_purchase', file);
+      formData.append('warranty_id', warrantyId);
+      // Keep document_type for classification (optional server-side)
+      formData.append('document_type', documentType);
+
+      const url = this.buildWarrantyUrl(
+        'warranty/customer/warranties/upload-proof'
+      );
+
+      const response = await this.makeRequest<{ success: boolean; message: string; data: import('@/types/warranty').ProofOfPurchaseInfo }>(url, {
+        method: 'POST',
+        body: formData,
+      });
+
+      return {
+        success: true,
+        data: response.data,
+        message: response.message || 'Proof of purchase uploaded successfully'
+      };
+    } catch (error) {
+      console.error('❌ Failed to upload proof of purchase:', error);
+      return {
+        success: false,
+        error: error instanceof ApiError ? error.message : 'Failed to upload proof of purchase',
+        message: 'Failed to upload proof of purchase'
       };
     }
   }

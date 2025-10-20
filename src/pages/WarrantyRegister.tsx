@@ -109,8 +109,9 @@ const WarrantyRegister: React.FC = () => {
   }, [barcode]);
 
   const isFormValid = useMemo(() => {
-    return !!barcode && !!serialNumber;
-  }, [barcode, serialNumber]);
+    // Registration now only requires barcode and proof_of_purchase (invoice file)
+    return !!barcode && !!invoiceFile;
+  }, [barcode, invoiceFile]);
 
   const handleScanResult = (code: string) => {
     setBarcode(code);
@@ -161,26 +162,12 @@ const WarrantyRegister: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      // Build FormData to support invoice upload alongside JSON fields
+      // Build FormData for registration: only barcode and proof_of_purchase
       const formData = new FormData();
-      formData.append("barcode_value", barcode);
-      if (productSku) formData.append("product_sku", productSku);
-      formData.append("serial_number", serialNumber);
-
+      formData.append("barcode", barcode);
       if (invoiceFile) {
-        formData.append("invoice_file", invoiceFile);
+        formData.append("proof_of_purchase", invoiceFile);
       }
-
-      // Build minimal customer_info without address (address only needed for claims)
-      const userRecord = user as unknown as Record<string, unknown>;
-      const customerInfo = {
-        first_name: (userRecord?.first_name as string) || (userRecord?.firstName as string) || "",
-        last_name: (userRecord?.last_name as string) || (userRecord?.lastName as string) || "",
-        email: (userRecord?.email as string) || "",
-        phone_number: (userRecord?.phone_number as string) || (userRecord?.phone as string) || "",
-      };
-
-      formData.append("customer_info", JSON.stringify(customerInfo));
 
       const res = await warrantyService.registerWarranty(formData);
       if (res.success && res.data) {
