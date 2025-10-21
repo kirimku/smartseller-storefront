@@ -26,9 +26,9 @@ interface AddressPickerProps {
   className?: string;
 }
 
-const debounce = (fn: (...args: any[]) => void, delay = 300) => {
+const debounce = <T extends (...args: unknown[]) => void>(fn: T, delay = 300) => {
   let timer: ReturnType<typeof setTimeout> | null = null;
-  return (...args: any[]) => {
+  return (...args: Parameters<T>) => {
     if (timer) clearTimeout(timer);
     timer = setTimeout(() => fn(...args), delay);
   };
@@ -147,11 +147,11 @@ export const AddressPicker: React.FC<AddressPickerProps> = ({
               <ScrollArea className="max-h-64">
                 <CommandGroup>
                   {results.map((loc) => (
-                    <CommandItem key={loc.id} onSelect={() => handleSelect(loc)}>
+                    <CommandItem key={loc.id} value={`${loc.name} ${loc.district || ''} ${loc.city || ''} ${loc.province || ''} ${loc.postal_code || ''}`.trim()} onSelect={() => handleSelect(loc)}>
                       <div className="flex flex-col">
                         <span className="text-sm font-medium">{loc.name}</span>
                         <span className="text-xs text-muted-foreground">
-                          {loc.type}{loc.province ? ` • ${loc.province}` : ''}{loc.postal_code ? ` • ${loc.postal_code}` : ''}
+                          {loc.type}{loc.province ? ` • ${loc.province}` : ''}{loc.city ? ` • ${loc.city}` : ''}{loc.district ? ` • ${loc.district}` : ''}{loc.postal_code ? ` • ${loc.postal_code}` : ''}
                         </span>
                       </div>
                     </CommandItem>

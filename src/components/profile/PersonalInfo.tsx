@@ -48,11 +48,11 @@ const PersonalInfo: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState<PersonalInfoFormData>({
-    firstName: user?.firstName || '',
-    lastName: user?.lastName || '',
+    firstName: user?.first_name || '',
+    lastName: user?.last_name || '',
     email: user?.email || '',
     phone: user?.phone || '',
-    dateOfBirth: user?.dateOfBirth || '',
+    dateOfBirth: user?.date_of_birth || '',
     gender: user?.gender || '',
   });
   const [validationErrors, setValidationErrors] = useState<Partial<PersonalInfoFormData>>({});
@@ -60,29 +60,11 @@ const PersonalInfo: React.FC = () => {
   const validateForm = (): boolean => {
     const errors: Partial<PersonalInfoFormData> = {};
 
-    if (!formData.firstName.trim()) {
-      errors.firstName = 'First name is required';
-    }
-
-    if (!formData.lastName.trim()) {
-      errors.lastName = 'Last name is required';
-    }
-
-    if (!formData.email.trim()) {
-      errors.email = 'Email is required';
-    } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
-      errors.email = 'Please enter a valid email address';
-    }
-
-    if (formData.phone && !/^\+?[\d\s\-()]+$/.test(formData.phone)) {
-      errors.phone = 'Please enter a valid phone number';
-    }
-
+    // Only validate editable fields
     if (formData.dateOfBirth) {
       const birthDate = new Date(formData.dateOfBirth);
       const today = new Date();
       const age = today.getFullYear() - birthDate.getFullYear();
-      
       if (age < 13) {
         errors.dateOfBirth = 'You must be at least 13 years old';
       }
@@ -90,15 +72,6 @@ const PersonalInfo: React.FC = () => {
 
     setValidationErrors(errors);
     return Object.keys(errors).length === 0;
-  };
-
-  const handleInputChange = (field: keyof PersonalInfoFormData, value: string) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
-    
-    // Clear validation error for this field
-    if (validationErrors[field]) {
-      setValidationErrors(prev => ({ ...prev, [field]: undefined }));
-    }
   };
 
   const handleSave = async () => {
@@ -111,11 +84,9 @@ const PersonalInfo: React.FC = () => {
 
     try {
       await updateProfile({
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        phone: formData.phone || undefined,
-        dateOfBirth: formData.dateOfBirth || undefined,
-        gender: formData.gender as 'male' | 'female' | 'other' || undefined,
+        // Only update editable fields; snake_case per API
+        date_of_birth: formData.dateOfBirth || undefined,
+        gender: (formData.gender as 'male' | 'female' | 'other' | 'prefer_not_to_say') || undefined,
       });
 
       setIsEditing(false);
@@ -126,13 +97,17 @@ const PersonalInfo: React.FC = () => {
     }
   };
 
+  const handleInputChange = (field: keyof PersonalInfoFormData, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }));
+  };
+
   const handleCancel = () => {
     setFormData({
-      firstName: user?.firstName || '',
-      lastName: user?.lastName || '',
+      firstName: user?.first_name || '',
+      lastName: user?.last_name || '',
       email: user?.email || '',
       phone: user?.phone || '',
-      dateOfBirth: user?.dateOfBirth || '',
+      dateOfBirth: user?.date_of_birth || '',
       gender: user?.gender || '',
     });
     setValidationErrors({});
@@ -164,7 +139,7 @@ const PersonalInfo: React.FC = () => {
         <CardContent>
           <div className="flex items-center space-x-6">
             <Avatar className="h-24 w-24">
-              <AvatarImage src={user.avatar} alt={getUserDisplayName()} />
+              <AvatarImage src="" alt={`${(user.first_name || '')} ${(user.last_name || '')}`.trim() || user.email} />
               <AvatarFallback className="text-xl font-semibold">
                 {getUserInitials()}
               </AvatarFallback>
@@ -215,34 +190,20 @@ const PersonalInfo: React.FC = () => {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* First Name */}
+            {/* First Name (read-only) */}
             <div className="space-y-2">
-              <Label htmlFor="firstName">First Name *</Label>
-              <Input
-                id="firstName"
-                value={formData.firstName}
-                onChange={(e) => handleInputChange('firstName', e.target.value)}
-                disabled={!isEditing}
-                className={validationErrors.firstName ? 'border-destructive' : ''}
-              />
-              {validationErrors.firstName && (
-                <p className="text-sm text-destructive">{validationErrors.firstName}</p>
-              )}
+              <Label htmlFor="firstName">First Name</Label>
+              <p className="text-sm text-muted-foreground" id="firstName">
+                {user.first_name || '-'}
+              </p>
             </div>
 
-            {/* Last Name */}
+            {/* Last Name (read-only) */}
             <div className="space-y-2">
-              <Label htmlFor="lastName">Last Name *</Label>
-              <Input
-                id="lastName"
-                value={formData.lastName}
-                onChange={(e) => handleInputChange('lastName', e.target.value)}
-                disabled={!isEditing}
-                className={validationErrors.lastName ? 'border-destructive' : ''}
-              />
-              {validationErrors.lastName && (
-                <p className="text-sm text-destructive">{validationErrors.lastName}</p>
-              )}
+              <Label htmlFor="lastName">Last Name</Label>
+              <p className="text-sm text-muted-foreground" id="lastName">
+                {user.last_name || '-'}
+              </p>
             </div>
 
             {/* Email */}
@@ -261,7 +222,7 @@ const PersonalInfo: React.FC = () => {
                   id="email"
                   type="email"
                   value={formData.email}
-                  disabled={true} // Email changes require verification
+                  disabled={true}
                   className="pr-10"
                 />
                 <Lock className="absolute right-3 top-3 h-4 w-4 text-muted-foreground" />
@@ -271,7 +232,7 @@ const PersonalInfo: React.FC = () => {
               </p>
             </div>
 
-            {/* Phone */}
+            {/* Phone (read-only) */}
             <div className="space-y-2">
               <Label htmlFor="phone" className="flex items-center space-x-2">
                 <Phone className="h-4 w-4" />
@@ -282,18 +243,9 @@ const PersonalInfo: React.FC = () => {
                   <AlertCircle className="h-4 w-4 text-orange-500" />
                 )}
               </Label>
-              <Input
-                id="phone"
-                type="tel"
-                value={formData.phone}
-                onChange={(e) => handleInputChange('phone', e.target.value)}
-                disabled={!isEditing}
-                placeholder="+1 (555) 123-4567"
-                className={validationErrors.phone ? 'border-destructive' : ''}
-              />
-              {validationErrors.phone && (
-                <p className="text-sm text-destructive">{validationErrors.phone}</p>
-              )}
+              <p className="text-sm text-muted-foreground" id="phone">
+                {user.phone || '-'}
+              </p>
             </div>
 
             {/* Date of Birth */}
@@ -383,7 +335,7 @@ const PersonalInfo: React.FC = () => {
             <div>
               <Label className="text-sm font-medium">Member Since</Label>
               <p className="text-sm text-muted-foreground">
-                {new Date(user.createdAt).toLocaleDateString('en-US', {
+                {new Date(user.created_at).toLocaleDateString('en-US', {
                   year: 'numeric',
                   month: 'long',
                   day: 'numeric'

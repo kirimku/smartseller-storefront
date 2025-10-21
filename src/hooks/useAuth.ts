@@ -1,6 +1,7 @@
 import { useContext, useCallback, useMemo } from 'react';
 import AuthContext from '@/contexts/AuthContext';
 import { useTenant } from '@/contexts/TenantContext';
+import type { RegisterRequest } from '@/services/customerService';
 
 /**
  * Custom hook for authentication
@@ -53,53 +54,76 @@ export const useAuth = () => {
   // Helper function to get user display name
   const getUserDisplayName = useCallback(() => {
     if (!user) return '';
-    
-    if (user.firstName && user.lastName) {
-      return `${user.firstName} ${user.lastName}`;
-    }
-    
-    if (user.firstName) {
-      return user.firstName;
-    }
-    
-    return user.email;
+    const u = user as unknown as Record<string, unknown>;
+    const first =
+      typeof u['firstName'] === 'string'
+        ? (u['firstName'] as string)
+        : typeof u['first_name'] === 'string'
+        ? (u['first_name'] as string)
+        : '';
+    const last =
+      typeof u['lastName'] === 'string'
+        ? (u['lastName'] as string)
+        : typeof u['last_name'] === 'string'
+        ? (u['last_name'] as string)
+        : '';
+    if (first && last) return `${first} ${last}`;
+    if (first) return first;
+    return (u['email'] as string) || '';
   }, [user]);
 
   // Helper function to check if user profile is complete
   const isProfileComplete = useCallback(() => {
     if (!user) return false;
-    
-    const requiredFields = ['firstName', 'lastName', 'email'];
-    
-    return requiredFields.every(field => {
-      const value = user[field as keyof typeof user];
-      return value && value.toString().trim() !== '';
-    });
+    const u = user as unknown as Record<string, unknown>;
+    const first =
+      typeof u['firstName'] === 'string' && (u['firstName'] as string).trim() !== ''
+        ? (u['firstName'] as string)
+        : typeof u['first_name'] === 'string' && (u['first_name'] as string).trim() !== ''
+        ? (u['first_name'] as string)
+        : '';
+    const last =
+      typeof u['lastName'] === 'string' && (u['lastName'] as string).trim() !== ''
+        ? (u['lastName'] as string)
+        : typeof u['last_name'] === 'string' && (u['last_name'] as string).trim() !== ''
+        ? (u['last_name'] as string)
+        : '';
+    const email = typeof u['email'] === 'string' && (u['email'] as string).trim() !== '' ? (u['email'] as string) : '';
+    return Boolean(first && last && email);
   }, [user]);
 
   // Helper function to get user initials for avatar
   const getUserInitials = useCallback(() => {
     if (!user) return '';
-    
-    if (user.firstName && user.lastName) {
-      return `${user.firstName.charAt(0)}${user.lastName.charAt(0)}`.toUpperCase();
-    }
-    
-    if (user.firstName) {
-      return user.firstName.charAt(0).toUpperCase();
-    }
-    
-    return user.email.charAt(0).toUpperCase();
+    const u = user as unknown as Record<string, unknown>;
+    const first =
+      typeof u['firstName'] === 'string'
+        ? (u['firstName'] as string)
+        : typeof u['first_name'] === 'string'
+        ? (u['first_name'] as string)
+        : '';
+    const last =
+      typeof u['lastName'] === 'string'
+        ? (u['lastName'] as string)
+        : typeof u['last_name'] === 'string'
+        ? (u['last_name'] as string)
+        : '';
+    if (first && last) return `${first.charAt(0)}${last.charAt(0)}`.toUpperCase();
+    if (first) return first.charAt(0).toUpperCase();
+    const email = (u['email'] as string) || '';
+    return email ? email.charAt(0).toUpperCase() : '';
   }, [user]);
 
   // Helper function to check if email is verified
   const isEmailVerified = useCallback(() => {
-    return user?.emailVerified || false;
+    const u = user as unknown as Record<string, unknown> | null;
+    return Boolean((u && u['emailVerified']) ?? (u && u['email_verified']) ?? false);
   }, [user]);
 
   // Helper function to check if phone is verified
   const isPhoneVerified = useCallback(() => {
-    return user?.phoneVerified || false;
+    const u = user as unknown as Record<string, unknown> | null;
+    return Boolean((u && u['phoneVerified']) ?? (u && u['phone_verified']) ?? false);
   }, [user]);
 
   // Helper function to get user's primary address
@@ -129,8 +153,8 @@ export const useAuth = () => {
     if (!tenant) {
       throw new Error('Tenant not loaded');
     }
-    
-    return login({ ...credentials, tenantId: tenant.id });
+    // customerService reads slug from TenantContext via AuthContext; no tenantId in payload
+    return login({ ...credentials });
   }, [login, tenant]);
 
   // Enhanced register with tenant-specific features
@@ -146,8 +170,17 @@ export const useAuth = () => {
     if (!tenant) {
       throw new Error('Tenant not loaded');
     }
-    
-    return register(userData);
+    // Transform camelCase to expected snake_case RegisterRequest
+    const payload: RegisterRequest = {
+      email: userData.email,
+      password: userData.password,
+      phone: userData.phone,
+      first_name: userData.firstName,
+      last_name: userData.lastName,
+      acceptTerms: userData.acceptTerms,
+      marketingOptIn: userData.acceptMarketing,
+    };
+    return register(payload);
   }, [register, tenant]);
 
   return {

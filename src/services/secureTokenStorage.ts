@@ -92,7 +92,7 @@ class SecureTokenStorage {
           customerId: customerData.id,
           customerEmailMasked: customerData.email?.replace(/(.{3}).*(.{3})@/, '$1***$2@')
         });
-      } catch {}
+      } catch (e) { /* non-blocking: ignore logging errors */ }
       // Validate device fingerprint if enabled
       if (this.fingerprintValidationEnabled) {
         await this.validateDeviceFingerprint(tokenData.deviceFingerprint);
@@ -207,7 +207,7 @@ class SecureTokenStorage {
         emailMasked: cd?.email?.replace(/(.{3}).*(.{3})@/, '$1***$2@'),
         lastLoginAt: cd?.lastLoginAt,
       });
-    } catch {}
+    } catch (e) { /* non-blocking: ignore logging errors */ }
     return this.customerData;
   }
 
@@ -288,6 +288,32 @@ class SecureTokenStorage {
   public async updateRefreshToken(refreshToken: string): Promise<void> {
     await this.storeEncryptedRefreshToken(refreshToken);
     this.dispatchTokenUpdateEvent();
+  }
+
+  /**
+   * Update only customer data (no token changes)
+   */
+  public async updateCustomerData(customerData: CustomerData): Promise<void> {
+    try {
+      // Keep existing device info if present, otherwise enrich with current device
+      const deviceInfo = this.customerData?.deviceInfo ?? await this.getCurrentDeviceInfo();
+      const updated: CustomerData = { ...customerData, deviceInfo };
+
+      this.customerData = updated;
+      await this.storeEncryptedCustomerData(updated);
+
+      // Notify listeners that auth-related storage changed
+      this.dispatchTokenUpdateEvent();
+      try {
+        console.debug('👤 Customer data updated', {
+          id: updated.id,
+          emailMasked: updated.email?.replace(/(.{3}).*(.{3})@/, '$1***$2@')
+        });
+      } catch (e) { /* non-blocking: ignore logging errors */ }
+    } catch (error) {
+      console.error('❌ Failed to update customer data:', error);
+      throw new Error('Failed to update customer data');
+    }
   }
 
   /**
@@ -869,7 +895,7 @@ class SecureTokenStorage {
     const recommendations: string[] = [];
     let securityLevel: 'high' | 'medium' | 'low' = 'high';
 
-    const isAuthenticated = this.isAuthenticated();
+    const isAuthenticated = await this.isAuthenticated();
     const tokenValid = await this.validateTokenIntegrity();
     
     let deviceTrusted = true;
@@ -915,8 +941,10 @@ class SecureTokenStorage {
   /**
    * Check if user is authenticated
    */
-  public isAuthenticated(): boolean {
-    return !!this.getAccessToken() && this.validateTokenIntegrity();
+  public async isAuthenticated(): Promise<boolean> {
+    const accessToken = this.getAccessToken();
+    if (!accessToken) return false;
+    return await this.validateTokenIntegrity();
   }
 }
 

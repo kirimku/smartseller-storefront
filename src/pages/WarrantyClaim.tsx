@@ -58,8 +58,8 @@ const WarrantyClaim: React.FC = () => {
     }
   }, [isAuthenticated, isLoading, tenantLoading, navigate, searchParams]);
 
-  // Required claim context: barcodeId
-  const [barcodeId, setBarcodeId] = useState<string>(searchParams.get("barcodeId") || "");
+  // Required claim context: barcode value (read-only)
+  const [barcode, setBarcode] = useState<string>(searchParams.get("barcode") || searchParams.get("barcodeId") || "");
 
   // Address fields
   const [addressLocation, setAddressLocation] = useState<AddressPickerValue | null>(null);
@@ -144,7 +144,7 @@ const WarrantyClaim: React.FC = () => {
     const resolvedPostal = postalCode || addressLocation?.postalCode || "";
     
     return (
-      !!barcodeId &&
+      !!barcode &&
       !!claimForm.issueDescription &&
       !!claimForm.customerName &&
       !!claimForm.email &&
@@ -157,19 +157,40 @@ const WarrantyClaim: React.FC = () => {
       !!paymentMethod
     );
   }, [
-    barcodeId, 
-    claimForm.issueDescription, 
-    claimForm.customerName, 
-    claimForm.email, 
-    addressLine1, 
-    city, 
-    state, 
-    postalCode, 
-    addressLocation,
+    barcode, 
+    claimForm.issueDescription,
+    claimForm.customerName,
+    claimForm.email,
+    addressLine1,
+    addressLine2,
+    city,
+    state,
+    postalCode,
     courierType,
     logisticService,
-    paymentMethod
+    paymentMethod,
+    addressLocation
   ]);
+
+  // Mobile nav tabs handling
+  const handleTabChange = (tab: string) => {
+    switch (tab) {
+      case "home":
+        navigate("/");
+        break;
+      case "warranty":
+        navigate("/warranty");
+        break;
+      case "shop":
+        navigate("/");
+        break;
+      case "profile":
+        navigate("/profile");
+        break;
+      default:
+        navigate("/warranty");
+    }
+  };
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
@@ -181,8 +202,8 @@ const WarrantyClaim: React.FC = () => {
     setError("");
     setSuccessMessage("");
 
-    if (!barcodeId) {
-      setError("Please enter a valid warranty barcode ID");
+    if (!barcode) {
+      setError("Please provide warranty barcode");
       return;
     }
 
@@ -193,8 +214,20 @@ const WarrantyClaim: React.FC = () => {
 
     setIsSubmitting(true);
     try {
+      // Resolve barcode ID from barcode value so API receives the correct ID
+      let resolvedBarcodeId = barcode;
+      try {
+        const validation = await warrantyService.validateBarcode(barcode);
+        const data = validation.data;
+        if (validation.success && data) {
+          resolvedBarcodeId = data.warranty_barcode?.id || data.warranty?.id || resolvedBarcodeId;
+        }
+      } catch (err) {
+        console.warn("Barcode validation failed, falling back to submitted value", err);
+      }
+
       const payload: SubmitClaimRequest = {
-        barcode_id: barcodeId,
+        barcode_id: resolvedBarcodeId,
         issue_description: claimForm.issueDescription,
         customer_name: claimForm.customerName,
         customer_email: claimForm.email,
@@ -228,26 +261,6 @@ const WarrantyClaim: React.FC = () => {
     }
   };
 
-  // Mobile nav tabs handling
-  const handleTabChange = (tab: string) => {
-    switch (tab) {
-      case "home":
-        navigate("/");
-        break;
-      case "warranty":
-        navigate("/warranty");
-        break;
-      case "shop":
-        navigate("/");
-        break;
-      case "profile":
-        navigate("/profile");
-        break;
-      default:
-        navigate("/warranty");
-    }
-  };
-
   return (
     <div className="min-h-screen bg-background">
       <MobileNav activeTab="warranty" onTabChange={handleTabChange} />
@@ -266,18 +279,13 @@ const WarrantyClaim: React.FC = () => {
             Provide issue details, location, and service preferences. We will process your claim within 2-3 business days.
           </p>
 
-          {/* Barcode ID input (required for standalone page) */}
+          {/* Warranty Barcode (read-only info) */}
           <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 mb-4">
             <div>
-              <Label htmlFor="barcodeId">Warranty Barcode ID*</Label>
-              <Input
-                id="barcodeId"
-                value={barcodeId}
-                onChange={(e) => setBarcodeId(e.target.value)}
-                placeholder="Enter warranty barcode ID"
-                className="mt-2"
-                required
-              />
+              <Label>Warranty Barcode</Label>
+              <div className="mt-2 px-3 py-2 rounded border bg-muted text-sm">
+                {barcode || "No barcode provided"}
+              </div>
             </div>
           </div>
 
@@ -298,36 +306,28 @@ const WarrantyClaim: React.FC = () => {
             <Separator />
 
             {/* Customer Information */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <MapPin className="h-5 w-5" />
-                Customer Information
-              </h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="name">Full Name*</Label>
-                  <Input
-                    id="name"
-                    value={claimForm.customerName}
-                    onChange={(e) => setClaimForm((prev) => ({ ...prev, customerName: e.target.value }))}
-                    required
-                    className="mt-2"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email*</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={claimForm.email}
-                    onChange={(e) => setClaimForm((prev) => ({ ...prev, email: e.target.value }))}
-                    required
-                    className="mt-2"
-                  />
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="name">Full Name*</Label>
+                <Input
+                  id="name"
+                  value={claimForm.customerName}
+                  onChange={(e) => setClaimForm((prev) => ({ ...prev, customerName: e.target.value }))}
+                  required
+                  className="mt-2"
+                />
               </div>
-
+              <div>
+                <Label htmlFor="email">Email*</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={claimForm.email}
+                  onChange={(e) => setClaimForm((prev) => ({ ...prev, email: e.target.value }))}
+                  required
+                  className="mt-2"
+                />
+              </div>
               <div>
                 <Label htmlFor="phone">Phone Number</Label>
                 <Input
@@ -351,6 +351,7 @@ const WarrantyClaim: React.FC = () => {
                   <AddressPicker
                     label="Location"
                     placeholder="Search city, district, area..."
+                    type="area"
                     value={addressLocation || undefined}
                     onChange={(val) => setAddressLocation(val)}
                     className="mt-1"
@@ -373,7 +374,7 @@ const WarrantyClaim: React.FC = () => {
                   <Label htmlFor="addressLine2">Address Line 2 (optional)</Label>
                   <Input
                     id="addressLine2"
-                    placeholder="Apartment, suite, unit"
+                    placeholder="Apartment, suite, unit, etc."
                     value={addressLine2}
                     onChange={(e) => setAddressLine2(e.target.value)}
                     className="mt-2"
@@ -384,7 +385,6 @@ const WarrantyClaim: React.FC = () => {
                   <Label htmlFor="city">City*</Label>
                   <Input
                     id="city"
-                    placeholder="Enter city"
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
                     required
@@ -396,7 +396,6 @@ const WarrantyClaim: React.FC = () => {
                   <Label htmlFor="state">State/Province*</Label>
                   <Input
                     id="state"
-                    placeholder="Enter state/province"
                     value={state}
                     onChange={(e) => setStateVal(e.target.value)}
                     required
@@ -405,10 +404,9 @@ const WarrantyClaim: React.FC = () => {
                 </div>
 
                 <div>
-                  <Label htmlFor="postalCode">Postal Code*</Label>
+                  <Label htmlFor="postal">Postal Code*</Label>
                   <Input
-                    id="postalCode"
-                    placeholder="Enter postal code"
+                    id="postal"
                     value={postalCode}
                     onChange={(e) => setPostalCode(e.target.value)}
                     required
@@ -418,95 +416,64 @@ const WarrantyClaim: React.FC = () => {
 
                 <div>
                   <Label htmlFor="country">Country*</Label>
-                  <Input
-                    id="country"
-                    placeholder="Enter country"
-                    value={country}
-                    onChange={(e) => setCountry(e.target.value)}
-                    required
-                    className="mt-2"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <Separator />
-
-            {/* Service Options */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <Truck className="h-5 w-5" />
-                Service Options
-              </h3>
-
-              <div>
-                <Label htmlFor="courierType">Service Type*</Label>
-                <Select value={courierType} onValueChange={setCourierType} required>
-                  <SelectTrigger className="mt-2">
-                    <SelectValue placeholder="Choose service type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {courierTypes.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        <div>
-                          <div className="font-medium">{type.label}</div>
-                          <div className="text-xs text-muted-foreground">{type.description}</div>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {courierType === "pickup" && (
-                <div>
-                  <Label htmlFor="logistics">Courier Service*</Label>
-                  <Select value={logisticService} onValueChange={setLogisticService} required>
+                  <Select value={country} onValueChange={setCountry}>
                     <SelectTrigger className="mt-2">
-                      <SelectValue placeholder="Choose courier service" />
+                      <SelectValue placeholder="Select country" />
                     </SelectTrigger>
                     <SelectContent>
-                      {logisticServices.map((service) => (
-                        <SelectItem key={service.value} value={service.value}>
-                          <div className="flex items-center gap-2">
-                            <Truck className="h-4 w-4" />
-                            <div>
-                              <div className="font-medium">{service.label}</div>
-                              <div className="text-xs text-muted-foreground">{service.description}</div>
-                            </div>
-                          </div>
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="ID">Indonesia</SelectItem>
+                      <SelectItem value="MY">Malaysia</SelectItem>
+                      <SelectItem value="SG">Singapore</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-              )}
+              </div>
             </div>
 
             <Separator />
 
-            {/* Payment Method */}
+            {/* Service Preferences */}
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold flex items-center gap-2">
-                <CreditCard className="h-5 w-5" />
-                Payment Method
-              </h3>
+              <h3 className="text-lg font-semibold">Service Preferences*</h3>
 
               <div>
-                <Label htmlFor="paymentMethod">Payment Method*</Label>
-                <Select value={paymentMethod} onValueChange={setPaymentMethod} required>
+                <Label htmlFor="courier">Courier Type*</Label>
+                <Select value={courierType} onValueChange={setCourierType}>
                   <SelectTrigger className="mt-2">
-                    <SelectValue placeholder="Choose payment method" />
+                    <SelectValue placeholder="Select courier type" />
                   </SelectTrigger>
                   <SelectContent>
-                    {paymentMethods.map((method) => (
-                      <SelectItem key={method.value} value={method.value}>
-                        <div>
-                          <div className="font-medium">{method.label}</div>
-                          <div className="text-xs text-muted-foreground">{method.description}</div>
-                        </div>
-                      </SelectItem>
+                    <SelectItem value="pickup">Pickup Service</SelectItem>
+                    <SelectItem value="dropoff">Drop-off Service</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="logistic">Logistic Service*</Label>
+                <Select value={logisticService} onValueChange={setLogisticService}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder="Select logistic service" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {logisticServices.map((svc) => (
+                      <SelectItem key={svc.value} value={svc.value}>{svc.label}</SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <Label htmlFor="payment">Payment Method*</Label>
+                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder="Select payment method" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                    <SelectItem value="e_wallet">E-Wallet</SelectItem>
+                    <SelectItem value="credit_card">Credit Card</SelectItem>
+                    <SelectItem value="cash">Cash on Delivery</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -514,11 +481,12 @@ const WarrantyClaim: React.FC = () => {
 
             <Separator />
 
-            {/* Invoice Upload */}
-            <div>
-              <Label htmlFor="invoice">Invoice/Receipt Upload</Label>
-              <div className="mt-2">
-                <div className="flex items-center gap-4">
+            {/* Proof of Purchase */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">Proof of Purchase</h3>
+              <div>
+                <Label htmlFor="invoice">Upload Invoice (PDF or Image)</Label>
+                <div className="flex items-center gap-2 mt-2">
                   <Input
                     id="invoice"
                     type="file"

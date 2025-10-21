@@ -728,8 +728,8 @@ export default function Warranty() {
             {selectedHistoryItem.status === "active" && (
               <Button
                 onClick={() => {
-                  setProduct(selectedHistoryItem);
-                  setCurrentStep("claim-form");
+                  const code = selectedHistoryItem.serialNumber || selectedHistoryItem.id;
+                  navigate(`/warranty/claim?barcode=${encodeURIComponent(code)}`);
                 }}
                 className="w-full mt-4"
               >

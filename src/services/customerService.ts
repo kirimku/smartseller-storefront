@@ -574,11 +574,37 @@ export class CustomerService {
    * Get current customer profile
    */
   async getProfile(): Promise<Customer> {
-    const storedCustomer = this.getStoredCustomer();
-    if (storedCustomer) {
-      return storedCustomer;
+    try {
+      // Fetch profile from API
+      const apiCustomer = await this.apiClient.getProfile(this.getStorefrontSlug());
+      const customer = this.convertApiCustomerToCustomer(apiCustomer);
+
+      // Persist essential customer data into secure storage
+      const existing = secureTokenStorage.getCustomerData();
+      const customerData: CustomerData = {
+        id: apiCustomer.id,
+        email: apiCustomer.email,
+        firstName: apiCustomer.first_name,
+        lastName: apiCustomer.last_name,
+        phone: apiCustomer.phone || '',
+        isEmailVerified: existing?.isEmailVerified ?? true,
+        lastLoginAt: existing?.lastLoginAt,
+      };
+
+      await secureTokenStorage.updateCustomerData(customerData);
+
+      return customer;
+    } catch (error) {
+      console.error('❌ Failed to fetch profile:', error);
+      // Fallback to stored customer if available
+      const fallback = this.getStoredCustomer();
+      if (fallback) return fallback;
+
+      if (error instanceof ApiError) {
+        throw error;
+      }
+      throw new ApiError({ message: 'Failed to load profile', status: 500, details: 'INTERNAL_ERROR' });
     }
-    throw new ApiError({ message: 'Profile not available', status: 404, details: 'NOT_FOUND' });
   }
 
   /**

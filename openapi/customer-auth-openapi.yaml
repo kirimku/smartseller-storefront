@@ -590,6 +590,217 @@ paths:
                 type: string
               example: "Internal server error"
 
+  /api/v1/storefront/{storefront_slug}/profile:
+    get:
+      summary: Get customer profile
+      description: |
+        Retrieves the authenticated customer's profile information including
+        personal details, contact information, and account settings.
+      operationId: getCustomerProfile
+      tags:
+        - Customer Profile
+      parameters:
+        - $ref: '#/components/parameters/StorefrontSlug'
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Profile retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Profile retrieved successfully"
+                  data:
+                    $ref: '#/components/schemas/CustomerResponse'
+              examples:
+                success_response:
+                  summary: Successful profile retrieval
+                  value:
+                    success: true
+                    message: "Profile retrieved successfully"
+                    data:
+                      id: "123e4567-e89b-12d3-a456-426614174000"
+                      email: "john.doe@example.com"
+                      phone: "+1234567890"
+                      first_name: "John"
+                      last_name: "Doe"
+                      date_of_birth: "1990-05-15T00:00:00Z"
+                      gender: "male"
+                      storefront_id: "b0ea82e3-366d-49a4-8c03-316a1ac2a2c4"
+                      status: "active"
+                      email_verified: true
+                      phone_verified: false
+                      tags: ["premium", "newsletter"]
+                      preferences:
+                        newsletter: true
+                        sms_notifications: false
+                      created_at: "2024-01-15T10:30:00Z"
+                      updated_at: "2024-01-15T10:30:00Z"
+        '401':
+          description: Unauthorized - authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Authentication required"
+        '404':
+          description: Customer profile not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Customer not found"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Internal server error"
+
+    put:
+      summary: Update customer profile
+      description: |
+        Updates the authenticated customer's profile information.
+        Only provided fields will be updated; omitted fields remain unchanged.
+      operationId: updateCustomerProfile
+      tags:
+        - Customer Profile
+      parameters:
+        - $ref: '#/components/parameters/StorefrontSlug'
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomerUpdateRequest'
+            examples:
+              basic_update:
+                summary: Update basic information
+                value:
+                  first_name: "John"
+                  last_name: "Smith"
+                  phone: "+1234567890"
+              full_update:
+                summary: Update with all optional fields
+                value:
+                  first_name: "Jane"
+                  last_name: "Smith"
+                  phone: "+9876543210"
+                  date_of_birth: "1992-08-20T00:00:00Z"
+                  gender: "female"
+                  tags: ["vip", "newsletter", "premium"]
+                  preferences:
+                    newsletter: true
+                    sms_notifications: true
+                    marketing_emails: false
+      responses:
+        '200':
+          description: Profile updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Profile updated successfully"
+                  data:
+                    $ref: '#/components/schemas/CustomerResponse'
+              examples:
+                success_response:
+                  summary: Successful profile update
+                  value:
+                    success: true
+                    message: "Profile updated successfully"
+                    data:
+                      id: "123e4567-e89b-12d3-a456-426614174000"
+                      email: "john.doe@example.com"
+                      phone: "+9876543210"
+                      first_name: "Jane"
+                      last_name: "Smith"
+                      date_of_birth: "1992-08-20T00:00:00Z"
+                      gender: "female"
+                      storefront_id: "b0ea82e3-366d-49a4-8c03-316a1ac2a2c4"
+                      status: "active"
+                      email_verified: true
+                      phone_verified: false
+                      tags: ["vip", "newsletter", "premium"]
+                      preferences:
+                        newsletter: true
+                        sms_notifications: true
+                        marketing_emails: false
+                      created_at: "2024-01-15T10:30:00Z"
+                      updated_at: "2024-10-20T15:45:00Z"
+        '400':
+          description: Bad request - validation failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidationErrorResponse'
+              examples:
+                validation_error:
+                  summary: Validation error
+                  value:
+                    error:
+                      code: "VALIDATION_FAILED"
+                      message: "Request validation failed"
+                      fields:
+                        - field: "phone"
+                          message: "Invalid phone number format"
+                          rule: "phone_format"
+        '401':
+          description: Unauthorized - authentication required
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Authentication required"
+        '404':
+          description: Customer profile not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Customer not found"
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Internal server error"
+
   /api/v1/storefront/{storefront_slug}/profile/change-password:
     post:
       summary: Change customer password

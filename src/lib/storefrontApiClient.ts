@@ -165,6 +165,13 @@ export class StorefrontApiClient {
     return `${this.baseUrl}/api/v1/storefront/${cleanSlug}/auth/${cleanEndpoint}`;
   }
 
+  // Add profile-specific URL builder for non-auth endpoints
+  private buildProfileUrl(storefrontSlug: string, endpoint?: string): string {
+    const cleanSlug = storefrontSlug.replace(/^\/+|\/+$/g, '');
+    const cleanEndpoint = endpoint ? `/${endpoint.replace(/^\/+/, '')}` : '';
+    return `${this.baseUrl}/api/v1/storefront/${cleanSlug}/profile${cleanEndpoint}`;
+  }
+
   /**
    * Make HTTP request with error handling
    */
@@ -334,7 +341,9 @@ export class StorefrontApiClient {
         storefrontSlug,
         refreshTokenPreview: `${refreshToken.substring(0, 12)}...`,
       });
-    } catch {}
+    } catch (_err) {
+      // non-blocking debug
+    }
 
     return this.makeRequest<TokenRefreshResponse>(url, {
       method: 'POST',
@@ -418,6 +427,15 @@ export class StorefrontApiClient {
       method: 'POST',
       body: JSON.stringify({ token, new_password: newPassword }),
     });
+  }
+
+  // Fetch authenticated customer profile
+  async getProfile(storefrontSlug: string): Promise<Customer> {
+    const url = this.buildProfileUrl(storefrontSlug);
+    const apiResponse = await this.makeRequest<ApiResponse<Customer>>(url, {
+      method: 'GET',
+    });
+    return apiResponse.data;
   }
 }
 
