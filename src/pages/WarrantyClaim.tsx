@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+
 import { Separator } from "@/components/ui/separator";
 import { Loader2, ArrowLeft, Upload, Truck, CheckCircle, MapPin, CreditCard } from "lucide-react";
 import { warrantyService } from "@/services/warrantyService";
@@ -64,11 +65,7 @@ const WarrantyClaim: React.FC = () => {
   // Address fields
   const [addressLocation, setAddressLocation] = useState<AddressPickerValue | null>(null);
   const [addressLine1, setAddressLine1] = useState<string>("");
-  const [addressLine2, setAddressLine2] = useState<string>("");
-  const [city, setCity] = useState<string>("");
-  const [state, setStateVal] = useState<string>("");
-  const [postalCode, setPostalCode] = useState<string>("");
-  const [country, setCountry] = useState<string>("ID");
+
 
   // Service selections
   const [courierType, setCourierType] = useState<string>("");
@@ -129,43 +126,34 @@ const WarrantyClaim: React.FC = () => {
   const completeAddress = useMemo(() => {
     const parts = [
       addressLine1,
-      addressLine2,
-      city || addressLocation?.locationName,
-      state || addressLocation?.province,
-      postalCode || addressLocation?.postalCode,
-      country
+      addressLocation?.city || addressLocation?.locationName,
+      addressLocation?.province,
+      addressLocation?.district,
+      addressLocation?.kelurahan,
+      addressLocation?.postalCode,
     ].filter(Boolean);
     return parts.join(", ");
-  }, [addressLine1, addressLine2, city, state, postalCode, country, addressLocation]);
+  }, [addressLine1, addressLocation]);
 
   const isFormValid = useMemo(() => {
-    const resolvedCity = city || addressLocation?.locationName || "";
-    const resolvedState = state || addressLocation?.province || "";
-    const resolvedPostal = postalCode || addressLocation?.postalCode || "";
-    
+    const hasLocation = !!addressLocation;
     return (
       !!barcode &&
       !!claimForm.issueDescription &&
       !!claimForm.customerName &&
       !!claimForm.email &&
       !!addressLine1 &&
-      !!resolvedCity &&
-      !!resolvedState &&
-      !!resolvedPostal &&
+      hasLocation &&
       !!courierType &&
       !!logisticService &&
       !!paymentMethod
     );
   }, [
-    barcode, 
+    barcode,
     claimForm.issueDescription,
     claimForm.customerName,
     claimForm.email,
     addressLine1,
-    addressLine2,
-    city,
-    state,
-    postalCode,
     courierType,
     logisticService,
     paymentMethod,
@@ -239,11 +227,18 @@ const WarrantyClaim: React.FC = () => {
         logistic_service: logisticService,
         payment_method: paymentMethod,
         address_details: {
-          street: addressLine1 + (addressLine2 ? ` ${addressLine2}` : ""),
-          city: city || addressLocation?.locationName || "",
-          state: state || addressLocation?.province || "",
-          postal_code: postalCode || addressLocation?.postalCode || "",
-          country: country,
+          street: addressLine1,
+          city: addressLocation?.city || addressLocation?.locationName || "",
+          state: addressLocation?.province || "",
+          postal_code: addressLocation?.postalCode || "",
+          // country removed per requirement
+        },
+        address_location: {
+          province: addressLocation?.province || undefined,
+          city: addressLocation?.city || addressLocation?.locationName || undefined,
+          district: addressLocation?.district || undefined,
+          postal_code: addressLocation?.postalCode || undefined,
+          kelurahan: addressLocation?.kelurahan || (addressLocation?.locationType === 'area' ? addressLocation?.locationName || undefined : undefined),
         }
       };
 
@@ -358,75 +353,18 @@ const WarrantyClaim: React.FC = () => {
                   />
                 </div>
 
-                <div>
-                  <Label htmlFor="addressLine1">Street Address*</Label>
+                <div className="md:col-span-2">
+                  <Label htmlFor="addressLine1">Alamat*</Label>
                   <Input
                     id="addressLine1"
                     placeholder="Enter street address"
                     value={addressLine1}
                     onChange={(e) => setAddressLine1(e.target.value)}
                     required
-                    className="mt-2"
+                    className="mt-2 h-12"
                   />
                 </div>
 
-                <div>
-                  <Label htmlFor="addressLine2">Address Line 2 (optional)</Label>
-                  <Input
-                    id="addressLine2"
-                    placeholder="Apartment, suite, unit, etc."
-                    value={addressLine2}
-                    onChange={(e) => setAddressLine2(e.target.value)}
-                    className="mt-2"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="city">City*</Label>
-                  <Input
-                    id="city"
-                    value={city}
-                    onChange={(e) => setCity(e.target.value)}
-                    required
-                    className="mt-2"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="state">State/Province*</Label>
-                  <Input
-                    id="state"
-                    value={state}
-                    onChange={(e) => setStateVal(e.target.value)}
-                    required
-                    className="mt-2"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="postal">Postal Code*</Label>
-                  <Input
-                    id="postal"
-                    value={postalCode}
-                    onChange={(e) => setPostalCode(e.target.value)}
-                    required
-                    className="mt-2"
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="country">Country*</Label>
-                  <Select value={country} onValueChange={setCountry}>
-                    <SelectTrigger className="mt-2">
-                      <SelectValue placeholder="Select country" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ID">Indonesia</SelectItem>
-                      <SelectItem value="MY">Malaysia</SelectItem>
-                      <SelectItem value="SG">Singapore</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
               </div>
             </div>
 

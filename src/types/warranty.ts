@@ -132,7 +132,14 @@ export interface SubmitClaimRequest {
     city: string;
     state: string;
     postal_code: string;
-    country: string;
+    country?: string;
+  };
+  address_location?: {
+    province?: string;
+    city?: string;
+    district?: string;
+    postal_code?: string;
+    kelurahan?: string;
   };
 }
 

@@ -138,6 +138,63 @@ export class TenantResolver implements TenantDatabaseResolver {
    * Get tenant configuration by slug/subdomain
    */
   async getTenantBySlug(slug: string): Promise<TenantConfig | null> {
+    // Dev-mode short-circuit to avoid network calls
+    if (this.config.developmentMode || import.meta.env.DEV) {
+      const mock: TenantConfig = {
+        id: `tenant-${slug}`,
+        name: slug.charAt(0).toUpperCase() + slug.slice(1),
+        subdomain: slug,
+        primaryColor: '#8B5CF6',
+        secondaryColor: '#A78BFA',
+        accentColor: '#C4B5FD',
+        fontFamily: 'Inter',
+        features: {
+          loyaltyProgram: true,
+          referralSystem: true,
+          spinWheel: true,
+          warrantyTracking: true,
+          productReviews: true,
+          wishlist: true,
+          compareProducts: true,
+          guestCheckout: true,
+          socialLogin: true,
+          multiCurrency: false,
+          multiLanguage: false,
+        },
+        branding: {
+          storeName: slug,
+          tagline: 'Development storefront',
+          description: 'Mock tenant configuration for development',
+          logo: { light: '/src/assets/Rexus_Logo.png', favicon: '/favicon.ico' },
+          colors: {
+            primary: '#8B5CF6',
+            secondary: '#A78BFA',
+            accent: '#C4B5FD',
+            background: '#FFFFFF',
+            foreground: '#1F2937',
+            muted: '#F3F4F6',
+            border: '#E5E7EB',
+          },
+          typography: { fontFamily: 'Inter', headingFont: 'Inter', bodyFont: 'Inter' },
+        },
+        settings: {
+          currency: 'USD',
+          language: 'en',
+          timezone: 'UTC',
+          dateFormat: 'MM/DD/YYYY',
+          numberFormat: 'en-US',
+          taxIncluded: false,
+          shippingEnabled: true,
+          inventoryTracking: true,
+          orderNotifications: true,
+          emailNotifications: true,
+          smsNotifications: true,
+        },
+      };
+      this.cache.set(slug, mock);
+      return mock;
+    }
+
     // Check cache first
     if (this.cache.has(slug)) {
       return this.cache.get(slug) || null;
@@ -180,6 +237,10 @@ export class TenantResolver implements TenantDatabaseResolver {
    * Validate if a tenant slug is valid
    */
   async validateTenantSlug(slug: string): Promise<boolean> {
+    // In development, assume tenant is valid to avoid network calls
+    if (this.config.developmentMode) {
+      return true;
+    }
     try {
       const tenant = await this.getTenantBySlug(slug);
       return tenant !== null;
@@ -197,7 +258,7 @@ export class TenantResolver implements TenantDatabaseResolver {
     
     if (resolution.isLocalhost || this.config.developmentMode) {
       // Development mode - use env override when available
-      const envBase = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8090';
+      const envBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8090';
       return envBase;
     }
 
@@ -217,6 +278,13 @@ export class TenantResolver implements TenantDatabaseResolver {
     // Check cache first
     if (this.typeCache.has(tenantId)) {
       return this.typeCache.get(tenantId)!;
+    }
+
+    // In development, short-circuit to SHARED to avoid network errors
+    if (this.config.developmentMode) {
+      const devType = TenantType.SHARED;
+      this.typeCache.set(tenantId, devType);
+      return devType;
     }
 
     try {
@@ -302,7 +370,7 @@ export class TenantResolver implements TenantDatabaseResolver {
 
   private buildApiBaseUrl(tenantId: string | null, isLocalhost: boolean): string {
     if (isLocalhost || this.config.developmentMode) {
-      const envBase = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8090';
+      const envBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8090';
       return envBase;
     }
 
@@ -323,7 +391,7 @@ export const defaultTenantResolverConfig: TenantResolverConfig = {
   enablePathBasedRouting: false,
   enableQueryParamFallback: true,
   productionDomains: ['smartseller.com'],
-  developmentMode: process.env.NODE_ENV === 'development',
+  developmentMode: import.meta.env.DEV,
 };
 
 /**

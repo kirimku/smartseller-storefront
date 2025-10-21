@@ -46,7 +46,9 @@ class TokenRefreshInterceptor {
         // Storefront-scoped auth endpoints
         '/auth/login',
         '/auth/register',
-        '/auth/refresh'
+        '/auth/refresh',
+        // Tenant endpoints are public; skip interception to avoid noise in dev
+        '/api/tenants'
       ],
       ...config
     };
@@ -384,7 +386,8 @@ class AxiosStyleInterceptor {
       '/api/v1/auth/refresh',
       '/auth/login',
       '/auth/register',
-      '/auth/refresh'
+      '/auth/refresh',
+      '/api/tenants'
     ];
     return excludeEndpoints.some(endpoint => url.includes(endpoint));
   }

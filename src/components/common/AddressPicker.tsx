@@ -12,7 +12,10 @@ export interface AddressPickerValue {
   locationName: string | null;
   locationType: KirimkuLocationType | null;
   province?: string | null;
+  city?: string | null;
+  district?: string | null;
   postalCode?: string | null;
+  kelurahan?: string | null;
 }
 
 interface AddressPickerProps {
@@ -92,14 +95,26 @@ export const AddressPicker: React.FC<AddressPickerProps> = ({
       locationName: loc.name,
       locationType: loc.type,
       province: loc.province || null,
+      city: loc.city || null,
+      district: loc.district || null,
       postalCode: loc.postal_code || null,
+      kelurahan: loc.type === 'area' ? loc.name : null,
     };
     onChange?.(selected);
     setOpen(false);
   };
 
   const clearSelection = () => {
-    onChange?.({ locationId: null, locationName: null, locationType: null, province: null, postalCode: null });
+    onChange?.({
+      locationId: null,
+      locationName: null,
+      locationType: null,
+      province: null,
+      city: null,
+      district: null,
+      postalCode: null,
+      kelurahan: null,
+    });
   };
 
   return (

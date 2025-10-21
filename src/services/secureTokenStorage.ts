@@ -113,6 +113,9 @@ class SecureTokenStorage {
       // Store encrypted customer data in localStorage (non-sensitive)
       await this.storeEncryptedCustomerData(enhancedCustomerData);
 
+      // Persist access token encrypted to survive reloads
+      await this.storeEncryptedAccessToken(tokenData.accessToken, tokenData.expiresAt);
+
       // Refresh token should be stored in httpOnly cookie by the server
       // For now, we'll store it encrypted in localStorage as fallback with enhanced security
       await this.storeEncryptedRefreshToken(tokenData.refreshToken);
@@ -242,6 +245,7 @@ class SecureTokenStorage {
       localStorage.removeItem('rt_secure');
       localStorage.removeItem('customer_secure');
       localStorage.removeItem('token_fingerprint');
+      localStorage.removeItem('at_secure');
 
       // Dispatch clear event
       this.dispatchTokenClearEvent();
@@ -279,6 +283,10 @@ class SecureTokenStorage {
   public updateAccessToken(accessToken: string, expiresAt: number): void {
     this.accessToken = accessToken;
     this.tokenExpiresAt = expiresAt;
+    // Persist encrypted access token for reload survival
+    void this.storeEncryptedAccessToken(accessToken, expiresAt).catch(() => {
+      // non-blocking persistence failure
+    });
     this.dispatchTokenUpdateEvent();
   }
 
@@ -337,7 +345,8 @@ class SecureTokenStorage {
     try {
       const hasCustomerEncrypted = !!localStorage.getItem('customer_secure');
       const hasRtEncrypted = !!localStorage.getItem('rt_secure');
-      console.log('ℹ️ Secure storage init:', { hasCustomerEncrypted, hasRtEncrypted });
+      const hasAtEncrypted = !!localStorage.getItem('at_secure');
+      console.log('ℹ️ Secure storage init:', { hasCustomerEncrypted, hasRtEncrypted, hasAtEncrypted });
 
       // Try to load customer data from secure localStorage format
       const encryptedCustomerData = localStorage.getItem('customer_secure');
@@ -349,8 +358,27 @@ class SecureTokenStorage {
         }
       }
 
-      // Access token is not persisted (memory only)
-      // Will need to be refreshed on app start
+      // Load persisted encrypted access token if present
+      const encryptedAccessToken = localStorage.getItem('at_secure');
+      if (encryptedAccessToken) {
+        const decryptedAt = await this.decryptSecureItem(encryptedAccessToken);
+        try {
+          console.debug('ℹ️ Access token decrypt status:', { success: !!decryptedAt, hasData: !!decryptedAt?.data });
+        } catch (e) {
+          // non-blocking debug
+        }
+        if (decryptedAt && decryptedAt.data) {
+          try {
+            const parsed = JSON.parse(decryptedAt.data) as { token: string; expiresAt: number };
+            if (parsed && typeof parsed.token === 'string' && typeof parsed.expiresAt === 'number') {
+              this.accessToken = parsed.token;
+              this.tokenExpiresAt = parsed.expiresAt;
+            }
+          } catch (e) {
+            console.warn('⚠️ Failed to parse persisted access token payload:', e);
+          }
+        }
+      }
     } catch (error) {
       console.error('❌ Failed to initialize from storage:', error);
       // Do not clear all tokens here to avoid wiping valid refresh tokens
@@ -441,6 +469,37 @@ class SecureTokenStorage {
     } catch (error) {
       console.error('❌ Failed to store refresh token:', error);
       throw error;
+    }
+  }
+
+  /**
+   * Store encrypted access token payload (token + expiresAt) in localStorage
+   */
+  private async storeEncryptedAccessToken(accessToken: string, expiresAt: number): Promise<void> {
+    try {
+      try {
+        console.debug('🔐 Storing encrypted access token', {
+          hasFingerprint: !!this.currentDeviceFingerprint,
+          tokenPreview: accessToken?.substring(0, 12) + '...',
+          expiresAtIso: new Date(expiresAt).toISOString(),
+        });
+      } catch (e) {
+        // Ignore logging errors
+      }
+      const payload = JSON.stringify({ token: accessToken, expiresAt });
+      const encryptedToken = await this.encryptSecureItem(
+        payload,
+        this.currentDeviceFingerprint || undefined
+      );
+      localStorage.setItem('at_secure', encryptedToken);
+      try {
+        console.debug('📝 at_secure bytes', { length: encryptedToken.length });
+      } catch (e) {
+        // Ignore logging errors
+      }
+    } catch (error) {
+      console.error('❌ Failed to store access token:', error);
+      // Non-blocking: do not throw as access token is already in memory
     }
   }
 

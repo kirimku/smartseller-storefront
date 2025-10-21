@@ -34,6 +34,50 @@ import {
 } from '@/types/warranty';
 import { secureTokenStorage } from '@/services/secureTokenStorage';
 
+// Add missing helper types/guards used within this service
+type FetchResponseLike = {
+  ok: boolean;
+  status: number;
+  statusText?: string;
+  headers?: Headers;
+  json?: () => Promise<unknown>;
+  text?: () => Promise<string>;
+};
+
+function hasProp(obj: unknown, prop: string): obj is Record<string, unknown> {
+  return typeof obj === 'object' && obj !== null && prop in obj;
+}
+
+function isWarrantyProduct(val: unknown): val is WarrantyProduct {
+  if (typeof val !== 'object' || val === null) return false;
+  const o = val as Record<string, unknown>;
+  const status = o['status'];
+  return (
+    typeof o['name'] === 'string' &&
+    typeof o['serialNumber'] === 'string' &&
+    (status === 'active' || status === 'expired' || status === 'claimed')
+  );
+}
+
+type ValidationResultUnion =
+  | WarrantyServiceResponse<ValidateBarcodeResponse>
+  | WarrantyServiceResponse<WarrantyProduct>;
+
+type WarrantiesReturnSuccess = GetCustomerWarrantiesResponse & {
+  success: true;
+  message?: string;
+  readonly data?: GetCustomerWarrantiesResponse;
+};
+
+type WarrantiesReturnFailure = {
+  success: false;
+  error: string;
+  message?: string;
+  data?: undefined;
+};
+
+type WarrantiesReturn = WarrantiesReturnSuccess | WarrantiesReturnFailure;
+
 export class WarrantyService {
   private apiClient: StorefrontApiClient;
   private baseUrl: string;
@@ -94,17 +138,18 @@ export class WarrantyService {
     url: string,
     options: RequestInit = {}
   ): Promise<T> {
+    const providedHeaders = (options.headers as Record<string, string>) || {};
+    const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData;
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...((options.headers as Record<string, string>) || {}),
+      ...providedHeaders,
     };
 
-    // If sending FormData, let the browser set the correct Content-Type
-    if (options.body instanceof FormData) {
+    if (!isFormData) {
+      headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+    } else {
       delete headers['Content-Type'];
     }
 
-    // Add authorization header from secure storage if available
     const accessToken = secureTokenStorage.getAccessToken() || this.apiClient.getAccessToken();
     if (accessToken && !headers.Authorization) {
       headers.Authorization = `Bearer ${accessToken}`;
@@ -115,22 +160,45 @@ export class WarrantyService {
       headers,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
+    const resp = response as FetchResponseLike;
+    const contentType = resp.headers?.get('content-type') || '';
+
+    if (!resp.ok) {
+      let errPayload: unknown = null;
+      const canJson = typeof resp.json === 'function';
+      const canText = typeof resp.text === 'function';
+      if (canJson) {
+        try {
+          errPayload = await resp.json();
+        } catch {
+          // ignore JSON parse errors
+        }
+      }
+      if (errPayload !== null) {
+        throw new ApiError({
+          message: JSON.stringify(errPayload),
+          status: resp.status,
+          details: errPayload,
+        });
+      }
+      const errorText = canText ? await resp.text() : '';
       throw new ApiError({
-        message: errorText || `HTTP ${response.status}: ${response.statusText}`,
-        status: response.status,
-        details: errorText,
+        message: errorText || `HTTP ${resp.status}: ${resp.statusText || ''}`,
+        status: resp.status,
+        details: errorText || null,
       });
     }
 
-    // Handle empty responses
-    const contentType = response.headers.get('content-type');
-    if (contentType && contentType.includes('application/json')) {
-      return response.json();
+    const canJson = typeof resp.json === 'function';
+    const canText = typeof resp.text === 'function';
+    if (contentType.includes('application/json') && canJson) {
+      return (await resp.json()) as T;
     }
-
-    return response.text() as T;
+    if (canJson) {
+      // If JSON parsing fails, propagate the error instead of silently falling back
+      return (await resp.json()) as T;
+    }
+    return (canText ? ((await resp.text()) as unknown as T) : ('' as unknown as T));
   }
 
   /**
@@ -170,11 +238,11 @@ export class WarrantyService {
   /**
    * Validate warranty barcode
    */
-  async validateBarcode(barcode: string): Promise<WarrantyServiceResponse<ValidateBarcodeResponse>> {
+  async validateBarcode(barcode: string): Promise<WarrantyServiceResponse<ValidateBarcodeResponse> | WarrantyServiceResponse<WarrantyProduct>> {
     try {
       const request: ValidateBarcodeRequest = { barcode };
       
-      const response = await this.makeRequest<ValidateBarcodeResponse>(
+      const response = await this.makeRequest<ValidateBarcodeResponse | WarrantyServiceResponse<WarrantyProduct>>(
         this.buildWarrantyUrl('warranty/validate-barcode'),
         {
           method: 'POST',
@@ -185,18 +253,30 @@ export class WarrantyService {
         }
       );
 
+      if (response && typeof response === 'object' && hasProp(response, 'success')) {
+        return response as WarrantyServiceResponse<WarrantyProduct>;
+      }
+
+      const v = response as ValidateBarcodeResponse;
       return {
         success: true,
-        data: response,
-        message: response.message
+        data: v,
+        message: v.message
       };
     } catch (error) {
       console.error('❌ Barcode validation failed:', error);
-      return {
-        success: false,
-        error: error instanceof ApiError ? error.message : 'Barcode validation failed',
-        message: 'Failed to validate barcode'
-      };
+      if (error instanceof ApiError) {
+        if (error.details && typeof error.details === 'object') {
+          return error.details as WarrantyServiceResponse<WarrantyProduct>;
+        }
+        try {
+          const parsed = JSON.parse(error.message);
+          return parsed as WarrantyServiceResponse<WarrantyProduct>;
+        } catch {
+          return { success: false, error: error.message } as WarrantyServiceResponse<WarrantyProduct>;
+        }
+      }
+      throw error;
     }
   }
 
@@ -234,10 +314,15 @@ export class WarrantyService {
   /**
    * Register warranty to customer account (Authentication required)
    */
-  async registerWarranty(data: CustomerWarrantyRegistrationRequest | FormData): Promise<WarrantyServiceResponse<CustomerWarrantyRegistrationResponse>> {
+  async registerWarranty(
+    data: CustomerWarrantyRegistrationRequest | FormData
+  ): Promise<
+    (CustomerWarrantyRegistrationResponse & { readonly data?: CustomerWarrantyRegistrationResponse; readonly message?: string; readonly success?: true }) |
+    { success: false; error: string; message?: string; [key: string]: unknown }
+  > {
     try {
-      // Use new customer register endpoint (also accepts file upload via multipart)
-      const url = this.buildWarrantyUrl('warranty/customer/warranties/register');
+      // Use storefront customer register endpoint (also accepts file upload via multipart)
+      const url = this.buildWarrantyUrl('warranties/register');
 
       const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
 
@@ -257,18 +342,31 @@ export class WarrantyService {
 
       const response = await this.makeRequest<CustomerWarrantyRegistrationResponse>(url, options);
 
-      return {
-        success: true,
-        data: response,
-        message: 'Warranty registered successfully'
-      };
+      // Augment raw success with non-enumerable wrapper fields for UI compatibility
+      const result = { ...response };
+      Object.defineProperty(result, 'data', { get: () => response, enumerable: false });
+      Object.defineProperty(result, 'message', { value: 'Warranty registered successfully', enumerable: false });
+      Object.defineProperty(result, 'success', { value: true, enumerable: false });
+
+      return result as CustomerWarrantyRegistrationResponse & { readonly data?: CustomerWarrantyRegistrationResponse; readonly message?: string; readonly success?: true };
     } catch (error) {
       console.error('❌ Warranty registration failed:', error);
-      return {
-        success: false,
-        error: error instanceof ApiError ? error.message : 'Warranty registration failed',
-        message: 'Failed to register warranty'
-      };
+      // Return server-provided JSON error object when available; otherwise rethrow network errors
+      if (error instanceof ApiError) {
+        // If ApiError.details carries parsed JSON, return it directly
+        if (error.details && typeof error.details === 'object') {
+          return error.details as { success: false; error: string; message?: string; [key: string]: unknown };
+        }
+        // Try to parse JSON string contained in message
+        try {
+          const parsed = JSON.parse(error.message);
+          return parsed as { success: false; error: string; message?: string; [key: string]: unknown };
+        } catch {
+          // Fallback minimal shape
+          return { success: false, error: (error as Error).message, message: 'Failed to register warranty' };
+        }
+      }
+      throw error;
     }
   }
 
@@ -317,7 +415,7 @@ export class WarrantyService {
   /**
    * Get customer's warranties with pagination and filtering
    */
-  async getCustomerWarranties(params: GetCustomerWarrantiesParams = {}): Promise<WarrantyServiceResponse<GetCustomerWarrantiesResponse>> {
+  async getCustomerWarranties(params: GetCustomerWarrantiesParams = {}): Promise<WarrantiesReturn> {
     try {
       const queryParams = new URLSearchParams();
       
@@ -334,18 +432,18 @@ export class WarrantyService {
         method: 'GET',
       });
 
-      return {
-        success: true,
-        data: response,
-        message: 'Warranties retrieved successfully'
-      };
+      const result: WarrantiesReturnSuccess = { ...response, success: true };
+      Object.defineProperty(result, 'message', { value: 'Warranties retrieved successfully', enumerable: false });
+      Object.defineProperty(result, 'data', { get: () => response, enumerable: false });
+
+      return result;
     } catch (error) {
       console.error('❌ Failed to get customer warranties:', error);
       return {
         success: false,
         error: error instanceof ApiError ? error.message : 'Failed to get warranties',
         message: 'Failed to retrieve warranties'
-      };
+      } as WarrantiesReturnFailure;
     }
   }
 
@@ -356,10 +454,18 @@ export class WarrantyService {
     try {
       const result = await this.getCustomerWarranties(params);
       
-      if (!result.success || !result.data) {
+      if (!result.success) {
         return {
           success: false,
-          error: result.error,
+          error: (result as WarrantiesReturnFailure).error,
+          message: result.message
+        };
+      }
+
+      if (!result.data) {
+        return {
+          success: false,
+          error: 'Failed to get warranties',
           message: result.message
         };
       }
@@ -629,56 +735,53 @@ export class WarrantyService {
    */
   async lookupWarranty(barcode: string): Promise<WarrantyServiceResponse<WarrantyProduct | null>> {
     try {
-      // First validate the barcode
-      const validationResult = await this.validateBarcode(barcode);
-      const data = validationResult.data;
+      const validationResult = (await this.validateBarcode(barcode)) as ValidationResultUnion;
+      const data = validationResult?.data;
 
-      // If validation call itself failed
-      if (!validationResult.success) {
-        return {
-          success: false,
-          error: 'Barcode validation failed',
-          message: data?.message || 'Failed to validate barcode'
-        };
+      if (!validationResult || !validationResult.success) {
+        return validationResult as WarrantyServiceResponse<WarrantyProduct | null>;
       }
 
-      // Handle cases where valid is false but server returns product+warranty details
-      if (data && data.valid === false) {
-        if (data.product && data.warranty) {
+      if (isWarrantyProduct(data)) {
+        return validationResult as WarrantyServiceResponse<WarrantyProduct>;
+      }
+
+      const obj = (data || {}) as Record<string, unknown>;
+      const valid = obj['valid'] as boolean | undefined;
+
+      if (valid === false) {
+        if (hasProp(obj, 'product') && hasProp(obj, 'warranty')) {
           const product: WarrantyProduct = {
-            id: data.warranty.id,
-            name: data.product.name || 'Unknown Product',
-            model: data.product.model || 'Unknown Model',
-            serialNumber: data.warranty.barcode_value || data.warranty.barcode || barcode,
-            purchaseDate: data.warranty.activated_at || '',
-            warrantyExpiry: data.warranty.expiry_date || '',
-            status: data.warranty.status === 'activated' ? 'active' :
-                    data.warranty.status === 'expired' ? 'expired' :
-                    data.warranty.status === 'claimed' ? 'claimed' : 'active',
-            category: data.product.category || 'Unknown',
-            image: data.product.image_url || '/placeholder.svg',
-            barcodeId: data.warranty.id
+            id: String((obj['warranty'] as Record<string, unknown>)['id'] || ''),
+            name: String((obj['product'] as Record<string, unknown>)['name'] || 'Unknown Product'),
+            model: String((obj['product'] as Record<string, unknown>)['model'] || 'Unknown Model'),
+            serialNumber: String((obj['warranty'] as Record<string, unknown>)['barcode_value'] || (obj['warranty'] as Record<string, unknown>)['barcode'] || barcode),
+            purchaseDate: String((obj['warranty'] as Record<string, unknown>)['activated_at'] || ''),
+            warrantyExpiry: String((obj['warranty'] as Record<string, unknown>)['expiry_date'] || ''),
+            status: ((obj['warranty'] as Record<string, unknown>)['status'] === 'activated') ? 'active' :
+                    ((obj['warranty'] as Record<string, unknown>)['status'] === 'expired') ? 'expired' :
+                    ((obj['warranty'] as Record<string, unknown>)['status'] === 'claimed') ? 'claimed' : 'active',
+            category: String((obj['product'] as Record<string, unknown>)['category'] || 'Unknown'),
+            image: String((obj['product'] as Record<string, unknown>)['image_url'] || '/placeholder.svg'),
+            barcodeId: String((obj['warranty'] as Record<string, unknown>)['id'] || '')
           };
           return {
             success: true,
             data: product,
-            message: data.message || 'Warranty found (inactive)'
+            message: String(obj['message'] || 'Warranty found (inactive)')
           };
         }
 
-        // No usable details returned
         return {
           success: false,
           error: 'Invalid barcode',
-          message: data?.message || 'Barcode not found'
+          message: String(obj['message'] || 'Barcode not found')
         };
       }
 
-      // If valid, attempt to map from either warranty_barcode or newer warranty+product shape
-
-      // Preferred: classic shape with warranty_barcode
-      if (data.warranty_barcode) {
-        const product = this.convertBarcodeToProduct(data.warranty_barcode);
+      const hasWb = hasProp(obj, 'warranty_barcode');
+      if (hasWb) {
+        const product = this.convertBarcodeToProduct((obj['warranty_barcode'] as WarrantyBarcode));
         return {
           success: true,
           data: product,
@@ -686,26 +789,26 @@ export class WarrantyService {
         };
       }
 
-      // Alternate shape: product + warranty
-      if (data.product && data.warranty) {
+      const hasProductWarranty = hasProp(obj, 'product') && hasProp(obj, 'warranty');
+      if (hasProductWarranty) {
         const product: WarrantyProduct = {
-          id: data.warranty.id,
-          name: data.product.name || 'Unknown Product',
-          model: data.product.model || 'Unknown Model',
-          serialNumber: data.warranty.barcode_value || data.warranty.barcode || barcode,
-          purchaseDate: data.warranty.activated_at || '',
-          warrantyExpiry: data.warranty.expiry_date || '',
-          status: data.warranty.status === 'activated' ? 'active' :
-                  data.warranty.status === 'expired' ? 'expired' :
-                  data.warranty.status === 'claimed' ? 'claimed' : 'active',
-          category: data.product.category || 'Unknown',
-          image: data.product.image_url || '/placeholder.svg',
-          barcodeId: data.warranty.id
+          id: String((obj['warranty'] as Record<string, unknown>)['id'] || ''),
+          name: String((obj['product'] as Record<string, unknown>)['name'] || 'Unknown Product'),
+          model: String((obj['product'] as Record<string, unknown>)['model'] || 'Unknown Model'),
+          serialNumber: String((obj['warranty'] as Record<string, unknown>)['barcode_value'] || (obj['warranty'] as Record<string, unknown>)['barcode'] || barcode),
+          purchaseDate: String((obj['warranty'] as Record<string, unknown>)['activated_at'] || ''),
+          warrantyExpiry: String((obj['warranty'] as Record<string, unknown>)['expiry_date'] || ''),
+          status: ((obj['warranty'] as Record<string, unknown>)['status'] === 'activated') ? 'active' :
+                  ((obj['warranty'] as Record<string, unknown>)['status'] === 'expired') ? 'expired' :
+                  ((obj['warranty'] as Record<string, unknown>)['status'] === 'claimed') ? 'claimed' : 'active',
+          category: String((obj['product'] as Record<string, unknown>)['category'] || 'Unknown'),
+          image: String((obj['product'] as Record<string, unknown>)['image_url'] || '/placeholder.svg'),
+          barcodeId: String((obj['warranty'] as Record<string, unknown>)['id'] || '')
         };
         return {
           success: true,
           data: product,
-          message: data.message || 'Warranty found successfully'
+          message: String(obj['message'] || 'Warranty found successfully')
         };
       }
 

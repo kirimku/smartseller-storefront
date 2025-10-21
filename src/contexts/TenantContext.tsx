@@ -214,7 +214,7 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
   const [slug, setSlug] = useState<string | null>(null);
   const [tenantResolution, setTenantResolution] = useState<TenantResolutionInfo | null>(null);
   const [slugDetection, setSlugDetection] = useState<SlugDetectionResult | null>(null);
-  const [tenantType, setTenantType] = useState<TenantType>('subdomain');
+  const [tenantType, setTenantType] = useState<TenantType>(TenantType.SHARED);
   const [apiBaseUrl, setApiBaseUrl] = useState<string>('');
 
 
@@ -225,7 +225,7 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
       setError(null);
       
       // In development, use mock data
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         const tenantConfig = mockTenants[detectedSubdomain];
         if (tenantConfig) {
           setTenant(tenantConfig);
@@ -317,7 +317,7 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
           setTenantType(type);
 
           // Perform slug detection
-          const slugResult = await slugDetectionService.detectSlug(resolution.tenantId);
+          const slugResult = slugDetectionService.detectSlug();
           setSlugDetection(slugResult);
 
           await loadTenantConfig(resolution.tenantId);
@@ -343,8 +343,11 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
 
   const validateSlug = async (slug: string): Promise<boolean> => {
     try {
-      const result = await slugDetectionService.detectSlug(slug);
-      return result.isValid;
+      const cfg = slugDetectionService.getConfig();
+      if (!slug || slug.length < cfg.minSlugLength || slug.length > cfg.maxSlugLength) {
+        return false;
+      }
+      return cfg.slugValidationPattern.test(slug);
     } catch {
       return false;
     }

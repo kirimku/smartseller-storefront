@@ -181,6 +181,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     return () => clearInterval(interval);
   }, [isAuthenticated]);
 
+  // Forced hourly refresh to keep tokens fresh even if far from expiry
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const hourly = setInterval(async () => {
+      try {
+        await jwtTokenManager.refreshToken();
+      } catch (error) {
+        console.warn('Hourly token refresh failed:', error);
+        await logout();
+      }
+    }, 60 * 60 * 1000); // Every hour
+
+    return () => clearInterval(hourly);
+  }, [isAuthenticated]);
+
   const login = async (credentials: LoginRequest): Promise<void> => {
     try {
       setIsLoading(true);
