@@ -51,9 +51,9 @@ export default defineConfig(({ mode }) => ({
         ],
       },
       manifest: {
-        name: 'Rexus Gaming Rewards',
-        short_name: 'Rexus Rewards',
-        description: 'Earn points and unlock exclusive rewards on your favorite Rexus gaming peripherals. Join the ultimate gaming loyalty program today.',
+        name: 'SmartSeller Storefront',
+        short_name: 'SmartSeller',
+        description: 'Powerful multi-tenant e-commerce platform enabling businesses to create branded storefronts with integrated loyalty programs and marketplace synchronization.',
         theme_color: '#7c3aed',
         background_color: '#0f172a',
         display: 'standalone',

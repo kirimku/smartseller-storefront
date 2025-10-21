@@ -1,10 +1,10 @@
-# Rexus Gaming Rewards Project
+# SmartSeller Storefront
 
-A comprehensive gaming peripheral rewards application built with React, TypeScript, and modern web technologies.
+A powerful multi-tenant e-commerce platform built with React, TypeScript, and modern web technologies.
 
 ## Project Overview
 
-This project is a loyalty rewards system for Rexus gaming peripherals, featuring:
+This project is a multi-tenant storefront platform that enables businesses to create branded e-commerce experiences, featuring:
 
 - **Point-based Redemption System** - Users can redeem gaming peripherals using loyalty points
 - **Admin Dashboard** - Complete order, inventory, and user management system
@@ -40,7 +40,7 @@ This project is built with:
 git clone <YOUR_GIT_URL>
 
 # Navigate to the project directory
-cd rexus-project
+cd smartseller-storefront
 
 # Install dependencies
 npm install
@@ -112,4 +112,4 @@ The project uses hot module reloading for fast development. All changes are auto
 
 ## License
 
-This project is proprietary software for Rexus Gaming.
+This project is proprietary software for SmartSeller Platform.

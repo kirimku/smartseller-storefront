@@ -1,8 +1,8 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'com.rexus.gaming.rewards',
-  appName: 'Rexus Gaming Rewards',
+  appId: 'com.smartseller.storefront',
+  appName: 'SmartSeller Storefront',
   webDir: 'dist',
   server: {
     cleartext: true

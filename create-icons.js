@@ -5,8 +5,7 @@ import fs from 'fs';
 const svgContent = `
 <svg width="512" height="512" xmlns="http://www.w3.org/2000/svg">
   <rect width="512" height="512" fill="#7c3aed" rx="80"/>
-  <text x="256" y="220" fill="white" font-family="Arial, sans-serif" font-size="80" font-weight="bold" text-anchor="middle">REXUS</text>
-  <text x="256" y="320" fill="white" font-family="Arial, sans-serif" font-size="40" text-anchor="middle">GAMING</text>
+  <text x="256" y="256" fill="white" font-family="Arial, sans-serif" font-size="60" font-weight="bold" text-anchor="middle">SMARTSELLER</text>
   <circle cx="256" cy="380" r="20" fill="#fbbf24"/>
 </svg>
 `;

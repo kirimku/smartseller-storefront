@@ -224,8 +224,9 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
       setIsLoading(true);
       setError(null);
       
-      // In development, use mock data
-      if (import.meta.env.DEV) {
+      // Use mock data in development OR when running on localhost (for Docker containers)
+      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      if (import.meta.env.DEV || isLocalhost) {
         const tenantConfig = mockTenants[detectedSubdomain];
         if (tenantConfig) {
           setTenant(tenantConfig);
@@ -236,7 +237,7 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
         return;
       }
       
-      // In production, fetch from SmartSeller API
+      // In production with real domain, fetch from SmartSeller API
       const apiBaseUrl = getApiBaseDomain();
       const response = await fetch(`${apiBaseUrl}/api/tenants/${detectedSubdomain}`);
       if (!response.ok) {

@@ -149,7 +149,7 @@ const PWAInstallPrompt: React.FC<PWAInstallPromptProps> = ({ onClose }) => {
           <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <Download className="w-8 h-8 text-purple-600" />
           </div>
-          <CardTitle className="text-xl">Install Rexus Gaming Rewards</CardTitle>
+          <CardTitle className="text-xl">Install SmartSeller Storefront</CardTitle>
           <CardDescription>
             Get the full app experience with offline access and notifications
           </CardDescription>

@@ -26,13 +26,18 @@ let updateCheckTimer = null;
 
 /**
  * Check if we're in development mode
+ * This checks for Vite dev server by looking for the dev server port and import.meta.env
  */
 function isDevelopment() {
-  return window.location.hostname === 'localhost' || 
-         window.location.hostname === '127.0.0.1' ||
-         window.location.hostname.includes('192.168.') ||
-         window.location.hostname.includes('10.') ||
-         window.location.hostname.endsWith('.local');
+  // Check if we're running on Vite dev server port (5124)
+  const isViteDevServer = window.location.port === '5124';
+  
+  // Check if we have access to import.meta.env (only available in dev)
+  const hasViteDevEnv = typeof window !== 'undefined' && 
+                        window.location.search.includes('dev') ||
+                        document.querySelector('script[type="module"][src*="/src/main.tsx"]') !== null;
+  
+  return isViteDevServer || hasViteDevEnv;
 }
 
 /**
