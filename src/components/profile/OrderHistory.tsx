@@ -26,6 +26,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import LoadingSpinner from '@/components/ui/LoadingSpinner';
+import { useNavigate } from 'react-router-dom';
 
 interface Order {
   id: string;
@@ -64,6 +65,7 @@ interface OrderItem {
 const OrderHistory: React.FC = () => {
   const { user, isLoading } = useAuth();
   const { tenant } = useTenant();
+  const navigate = useNavigate();
   
   const [orders, setOrders] = useState<Order[]>([]);
   const [filteredOrders, setFilteredOrders] = useState<Order[]>([]);
@@ -558,7 +560,7 @@ const OrderHistory: React.FC = () => {
                   </div>
                   
                   <div className="flex items-center space-x-2">
-                    <Button variant="outline" size="sm">
+                    <Button variant="outline" size="sm" onClick={() => navigate(`/invoice/${order.id}`)}>
                       <Download className="h-4 w-4 mr-2" />
                       Invoice
                     </Button>

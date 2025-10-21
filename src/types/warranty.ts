@@ -116,13 +116,12 @@ export interface GetWarrantyDetailsResponse {
 }
 
 export interface SubmitClaimRequest {
-  barcode_id: string;
+  barcode: string;
   issue_description: string;
   customer_name: string;
   customer_email: string;
   customer_phone?: string;
   customer_address?: string;
-  priority?: 'low' | 'medium' | 'high' | 'urgent';
   // Enhanced claim fields
   courier_type?: string;
   logistic_service?: string;
@@ -141,6 +140,7 @@ export interface SubmitClaimRequest {
     postal_code?: string;
     kelurahan?: string;
   };
+  invoice_attachment_id?: string;
 }
 
 export interface SubmitClaimResponse {
@@ -182,6 +182,19 @@ export interface UpdateClaimRequest {
 export interface UpdateClaimResponse {
   success: boolean;
   claim: WarrantyClaim;
+  message: string;
+}
+
+export interface PreUploadAttachmentResponse {
+  success: boolean;
+  attachment: {
+    id: string;
+    filename: string;
+    file_url: string;
+    file_type: string;
+    file_size: number;
+    uploaded_at?: string;
+  };
   message: string;
 }
 
@@ -338,7 +351,6 @@ export interface ClaimFormData {
   address: string;
   invoiceFile: File | null;
   logisticService: string;
-  priority?: 'low' | 'medium' | 'high' | 'urgent';
 }
 
 // Pagination helper

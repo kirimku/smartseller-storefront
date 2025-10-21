@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 import { Separator } from "@/components/ui/separator";
-import { Loader2, ArrowLeft, Upload, Truck, CheckCircle, MapPin, CreditCard } from "lucide-react";
+import { Loader2, ArrowLeft, Upload, Truck, CheckCircle, MapPin } from "lucide-react";
 import { warrantyService } from "@/services/warrantyService";
 import { type ClaimFormData, type SubmitClaimRequest, type LogisticService } from "@/types/warranty";
 import { useAuth } from "@/hooks/useAuth";
@@ -37,12 +37,7 @@ const courierTypes = [
   { value: "dropoff", label: "Drop-off Service", description: "You drop off the product at service center" },
 ];
 
-const paymentMethods = [
-  { value: "bank_transfer", label: "Bank Transfer", description: "Transfer to company account" },
-  { value: "e_wallet", label: "E-Wallet", description: "GoPay, OVO, DANA, ShopeePay" },
-  { value: "credit_card", label: "Credit Card", description: "Visa, Mastercard, JCB" },
-  { value: "cash", label: "Cash on Delivery", description: "Pay when product is delivered" },
-];
+const PAYMENT_METHOD = "QRIS";
 
 const WarrantyClaim: React.FC = () => {
   const navigate = useNavigate();
@@ -70,7 +65,8 @@ const WarrantyClaim: React.FC = () => {
   // Service selections
   const [courierType, setCourierType] = useState<string>("");
   const [logisticService, setLogisticService] = useState<string>("");
-  const [paymentMethod, setPaymentMethod] = useState<string>("");
+  // Payment method is fixed to QRIS
+  const paymentMethod = PAYMENT_METHOD;
 
   // Form state
   const [claimForm, setClaimForm] = useState<ClaimFormData>({
@@ -81,7 +77,6 @@ const WarrantyClaim: React.FC = () => {
     address: "",
     invoiceFile: null,
     logisticService: "",
-    priority: "medium",
   });
 
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -182,6 +177,20 @@ const WarrantyClaim: React.FC = () => {
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0] || null;
+    // Validate file type and size (<= 5MB, JPG/PNG/PDF)
+    if (file) {
+      const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
+      const isValidType = allowedTypes.includes(file.type);
+      const isValidSize = file.size <= 5 * 1024 * 1024; // 5MB
+      if (!isValidType) {
+        setError('Invalid file type. Only JPG, PNG, or PDF allowed.');
+        return;
+      }
+      if (!isValidSize) {
+        setError('File is too large. Maximum size is 5MB.');
+        return;
+      }
+    }
     setClaimForm((prev) => ({ ...prev, invoiceFile: file }));
   };
 
@@ -202,36 +211,35 @@ const WarrantyClaim: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      // Resolve barcode ID from barcode value so API receives the correct ID
-      let resolvedBarcodeId = barcode;
-      try {
-        const validation = await warrantyService.validateBarcode(barcode);
-        const data = validation.data;
-        if (validation.success && data) {
-          resolvedBarcodeId = data.warranty_barcode?.id || data.warranty?.id || resolvedBarcodeId;
+      // Pre-upload attachment if provided
+      let invoiceAttachmentId: string | undefined = undefined;
+      if (claimForm.invoiceFile) {
+        const preUpload = await warrantyService.preUploadClaimAttachment(claimForm.invoiceFile);
+        if (preUpload.success && preUpload.data?.attachment?.id) {
+          invoiceAttachmentId = preUpload.data.attachment.id;
+        } else {
+          setError(preUpload.error || preUpload.message || 'Failed to upload invoice attachment');
+          setIsSubmitting(false);
+          return;
         }
-      } catch (err) {
-        console.warn("Barcode validation failed, falling back to submitted value", err);
       }
 
+      // Use RAW barcode directly per backend acceptance; no validation/ID resolution required
       const payload: SubmitClaimRequest = {
-        barcode_id: resolvedBarcodeId,
+        barcode,
         issue_description: claimForm.issueDescription,
         customer_name: claimForm.customerName,
         customer_email: claimForm.email,
         customer_phone: claimForm.phone,
         customer_address: completeAddress,
-        priority: claimForm.priority || "medium",
-        // Additional fields for enhanced claim
         courier_type: courierType,
         logistic_service: logisticService,
-        payment_method: paymentMethod,
+        payment_method: PAYMENT_METHOD,
         address_details: {
           street: addressLine1,
           city: addressLocation?.city || addressLocation?.locationName || "",
           state: addressLocation?.province || "",
           postal_code: addressLocation?.postalCode || "",
-          // country removed per requirement
         },
         address_location: {
           province: addressLocation?.province || undefined,
@@ -239,7 +247,8 @@ const WarrantyClaim: React.FC = () => {
           district: addressLocation?.district || undefined,
           postal_code: addressLocation?.postalCode || undefined,
           kelurahan: addressLocation?.kelurahan || (addressLocation?.locationType === 'area' ? addressLocation?.locationName || undefined : undefined),
-        }
+        },
+        invoice_attachment_id: invoiceAttachmentId,
       };
 
       const res = await warrantyService.submitClaim(payload);
@@ -403,17 +412,8 @@ const WarrantyClaim: React.FC = () => {
 
               <div>
                 <Label htmlFor="payment">Payment Method*</Label>
-                <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                  <SelectTrigger className="mt-2">
-                    <SelectValue placeholder="Select payment method" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                    <SelectItem value="e_wallet">E-Wallet</SelectItem>
-                    <SelectItem value="credit_card">Credit Card</SelectItem>
-                    <SelectItem value="cash">Cash on Delivery</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Input id="payment" value={PAYMENT_METHOD} disabled className="mt-2" />
+                <p className="text-xs text-muted-foreground mt-1">QRIS is the only supported method.</p>
               </div>
             </div>
 

@@ -520,10 +520,7 @@ export class WarrantyService {
    */
   async submitClaim(data: SubmitClaimRequest): Promise<WarrantyServiceResponse<SubmitClaimResponse>> {
     try {
-      const url = this.buildWarrantyUrl(
-        'warranty/customer/claims'
-      );
-
+      const url = this.buildWarrantyUrl('claims/submit');
       const response = await this.makeRequest<SubmitClaimResponse>(url, {
         method: 'POST',
         headers: {
@@ -531,7 +528,6 @@ export class WarrantyService {
         },
         body: JSON.stringify(data),
       });
-
       return {
         success: true,
         data: response,
@@ -673,16 +669,14 @@ export class WarrantyService {
   /**
    * Upload attachment to warranty claim
    */
-  async uploadClaimAttachment(claimId: string, file: File): Promise<WarrantyServiceResponse<UploadAttachmentResponse>> {
+  async preUploadClaimAttachment(file: File): Promise<WarrantyServiceResponse<import('@/types/warranty').PreUploadAttachmentResponse>> {
     try {
       const formData = new FormData();
       formData.append('file', file);
 
-      const url = this.buildWarrantyUrl(
-        `warranty/customer/claims/${claimId}/attachments`
-      );
+      const url = this.buildWarrantyUrl('claims/attachments/upload');
 
-      const response = await this.makeRequest<UploadAttachmentResponse>(url, {
+      const response = await this.makeRequest<import('@/types/warranty').PreUploadAttachmentResponse>(url, {
         method: 'POST',
         body: formData,
       });
@@ -693,7 +687,7 @@ export class WarrantyService {
         message: response.message
       };
     } catch (error) {
-      console.error('❌ Failed to upload claim attachment:', error);
+      console.error('❌ Failed to pre-upload claim attachment:', error);
       return {
         success: false,
         error: error instanceof ApiError ? error.message : 'Failed to upload attachment',

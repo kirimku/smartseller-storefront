@@ -24,6 +24,7 @@ import Login from "./pages/Login";
 import EmailVerificationPage from "./components/auth/EmailVerificationPage";
 import WarrantyRegister from "./pages/WarrantyRegister";
 import WarrantyClaim from "./pages/WarrantyClaim";
+import Invoice from "./pages/Invoice";
 
 const queryClient = new QueryClient();
 
@@ -66,6 +67,7 @@ const TenantAwareApp = () => {
         <Route path="/profile" element={<Profile />} />
         <Route path="/my-orders" element={<MyOrders />} />
         <Route path="/loyalty" element={<LoyaltyRewards />} />
+        <Route path="/invoice/:orderId" element={<Invoice />} />
         
         {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
         <Route path="*" element={<NotFound />} />
