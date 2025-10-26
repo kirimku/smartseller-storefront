@@ -194,9 +194,9 @@ paths:
                   description: Proof of purchase document file (PDF, JPG, PNG)
                 document_type:
                   type: string
-                  enum: [receipt, invoice, purchase_order, warranty_card]
+                  enum: [pdf, image]
                   description: Type of proof of purchase document
-                  example: "receipt"
+                  example: "pdf"
             encoding:
               file:
                 contentType: application/pdf, image/jpeg, image/png
@@ -304,18 +304,27 @@ paths:
           multipart/form-data:
             schema:
               type: object
+              required:
+                - barcode
+                - file
+                - document_type
               properties:
                 barcode:
                   type: string
                   description: "Warranty barcode value (product SKU and serial number will be extracted from this)"
                   example: "WB-2024-001234567"
-                proof_of_purchase:
+                file:
                   type: string
                   format: binary
-                  description: "Invoice or receipt file"
-              required:
-                - barcode
-                - proof_of_purchase
+                  description: "Proof of purchase document file (PDF, JPG, PNG)"
+                document_type:
+                  type: string
+                  enum: [pdf, image]
+                  description: "Type of proof of purchase document"
+                  example: "pdf"
+            encoding:
+              file:
+                contentType: application/pdf, image/jpeg, image/png
       responses:
         '201':
           description: Warranty registered successfully
@@ -566,17 +575,29 @@ components:
     CustomerWarrantyRegistrationRequest:
       type: object
       required:
-        - barcode
-        - proof_of_purchase
+        - barcode_value
+        - product_sku
+        - serial_number
+        - purchase_date
+        - retailer_name
+        - customer_info
       properties:
-        barcode:
+        barcode_value:
           type: string
-          description: "Warranty barcode value (product SKU and serial number will be extracted from this)"
+          description: "Warranty barcode value"
           example: "WB-2024-001234567"
+        product_sku:
+          type: string
+          description: "Product SKU"
+          example: "REXUS-KB100-BLK"
+        serial_number:
+          type: string
+          description: "Product serial number"
+          example: "RX100KB2024001234"
         purchase_date:
           type: string
           format: date-time
-          description: "Purchase date (optional)"
+          description: "Purchase date"
           example: "2024-01-15T00:00:00Z"
         purchase_price:
           type: number
@@ -585,7 +606,7 @@ components:
           example: 999.99
         retailer_name:
           type: string
-          description: "Name of the retailer (optional)"
+          description: "Name of the retailer"
           example: "TechStore Inc"
         retailer_address:
           type: string
@@ -595,8 +616,27 @@ components:
           type: string
           description: "Invoice number (optional)"
           example: "INV-2024-001"
+        customer_info:
+          $ref: '#/components/schemas/CustomerRegistrationInfo'
         proof_of_purchase:
-          $ref: '#/components/schemas/ProofOfPurchaseInfo'
+          type: object
+          description: "Proof of purchase information (optional)"
+          properties:
+            document_type:
+              type: string
+              enum: [pdf, image]
+              description: "Type of proof document"
+              example: "pdf"
+            document_url:
+              type: string
+              format: uri
+              description: "URL to the uploaded proof document"
+              example: "https://cloudflare-bucket.com/receipts/receipt-123.pdf"
+            uploaded_at:
+              type: string
+              format: date-time
+              description: "Upload timestamp"
+              example: "2024-01-15T10:30:00Z"
 
     CustomerWarrantyRegistrationResponse:
       type: object
@@ -748,8 +788,8 @@ components:
         document_type:
           type: string
           description: "Type of proof document"
-          enum: [receipt, invoice, purchase_order, warranty_card]
-          example: "receipt"
+          enum: [pdf, image]
+          example: "pdf"
         document_url:
           type: string
           format: uri

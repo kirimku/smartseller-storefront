@@ -156,7 +156,6 @@ export default function Warranty() {
     email: "",
     phone: "",
     address: "",
-    invoiceFile: null,
     logisticService: "",
     priority: "medium"
   });
@@ -190,13 +189,9 @@ export default function Warranty() {
         language: 'en',
         timezone: 'UTC'
       }
-    },
-    proof_of_purchase: {
-      document_type: '',
-      document_url: '',
-      uploaded_at: ''
     }
   });
+  const [proofOfPurchaseFile, setProofOfPurchaseFile] = useState<File | null>(null);
   const [isRegistering, setIsRegistering] = useState(false);
   const [registrationSuccess, setRegistrationSuccess] = useState<CustomerWarrantyRegistrationResponse | null>(null);
 
@@ -361,7 +356,7 @@ export default function Warranty() {
     setIsSubmittingClaim(true);
     try {
       const claimData: SubmitClaimRequest = {
-        barcode_id: product.barcodeId || product.id,
+        barcode: product.barcodeId || product.id,
         issue_description: claimForm.issueDescription,
         customer_name: claimForm.customerName,
         customer_email: claimForm.email,
@@ -388,6 +383,55 @@ export default function Warranty() {
     const file = e.target.files?.[0];
     if (file) {
       setClaimForm(prev => ({ ...prev, invoiceFile: file }));
+    }
+  };
+
+  const handleProofOfPurchaseUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setError("File size must be less than 5MB");
+        return;
+      }
+      
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+      if (!allowedTypes.includes(file.type)) {
+        setError("Please upload a valid image (JPG, PNG) or PDF file");
+        return;
+      }
+
+      // Store the file for upload
+      setProofOfPurchaseFile(file);
+      setError(""); // Clear any previous errors
+      
+      // Upload the file immediately
+       try {
+         setIsLoading(true);
+         const uploadResponse = await warrantyService.uploadProofOfPurchase(file);
+         
+         if (uploadResponse.success && uploadResponse.data) {
+           // Update the registration form with the uploaded document details
+           setRegistrationForm(prev => ({
+             ...prev,
+             proof_of_purchase: {
+               document_type: uploadResponse.data!.document_type,
+               document_url: uploadResponse.data!.document_url,
+               uploaded_at: new Date().toISOString()
+             }
+           }));
+         } else {
+           setError(uploadResponse.error || "Failed to upload proof of purchase");
+           setProofOfPurchaseFile(null); // Clear the file on error
+         }
+       } catch (error) {
+         console.error('Upload error:', error);
+         setError("Failed to upload proof of purchase");
+         setProofOfPurchaseFile(null); // Clear the file on error
+       } finally {
+         setIsLoading(false);
+       }
     }
   };
 
@@ -421,11 +465,11 @@ export default function Warranty() {
     setTimeout(async () => {
       try {
         const response = await warrantyService.registerWarranty(registrationData);
-        if (response.success && response.data) {
-          setRegistrationSuccess(response.data);
+        if ('success' in response && response.success) {
+          setRegistrationSuccess(response.data || response);
           setCurrentStep("register-success");
         } else {
-          setError(response.error || "Failed to register warranty. Please try again.");
+          setError('error' in response ? response.error : "Failed to register warranty. Please try again.");
         }
       } catch (error) {
         console.error('Error registering warranty:', error);
@@ -1164,6 +1208,38 @@ export default function Warranty() {
                   />
                 </div>
               </div>
+              
+              <div>
+                <Label htmlFor="proof-of-purchase">Proof of Purchase*</Label>
+                <div className="mt-2">
+                  <div className="flex items-center gap-4">
+                    <Input
+                      id="proof-of-purchase"
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={handleProofOfPurchaseUpload}
+                      className="hidden"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => document.getElementById('proof-of-purchase')?.click()}
+                      className="flex items-center gap-2"
+                    >
+                      <Upload className="h-4 w-4" />
+                      {registrationForm.proof_of_purchase.document_url ? 'Change File' : 'Upload Receipt/Invoice'}
+                    </Button>
+                    {registrationForm.proof_of_purchase.document_url && (
+                      <span className="text-sm text-muted-foreground">
+                        File uploaded successfully
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Upload your receipt or invoice. Accepted formats: JPG, PNG, PDF (Max 5MB)
+                  </p>
+                </div>
+              </div>
             </div>
           </Card>
         </TabsContent>
@@ -1279,9 +1355,9 @@ export default function Warranty() {
                   }
                 },
                 proof_of_purchase: {
-                  document_type: '',
+                  document_type: 'image',
                   document_url: '',
-                  uploaded_at: ''
+                  uploaded_at: new Date().toISOString()
                 }
               });
             }}

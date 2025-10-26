@@ -1,4 +1,4 @@
-  schemas:
+schemas:
     UserDTO:
       type: object
       properties:
@@ -72,3 +72,253 @@
       type: string
       enum: [PENDING, PAID, EXPIRED, CANCELLED]
       example: "PENDING"
+      
+    # Kirimku related schemas
+    KirimkuAddressRequest:
+      type: object
+      required:
+        - name
+        - phone
+        - address
+        - area_id
+        - city_id
+        - province_id
+        - postal_code
+      properties:
+        name:
+          type: string
+          description: Recipient/sender name
+          example: "John Doe"
+        phone:
+          type: string
+          description: Phone number
+          example: "628123456789"
+        email:
+          type: string
+          format: email
+          description: Email address (optional)
+          example: "john.doe@example.com"
+        address:
+          type: string
+          description: Full address
+          example: "Jl. Sudirman No. 123, Gedung A, Lantai 5"
+        area_id:
+          type: string
+          description: Area/district ID
+          example: "1101"
+        city_id:
+          type: string
+          description: City ID
+          example: "11"
+        province_id:
+          type: string
+          description: Province ID
+          example: "1"
+        postal_code:
+          type: string
+          description: Postal code
+          example: "10110"
+        latitude:
+          type: string
+          description: Latitude coordinate (optional)
+          example: "-6.2088"
+        longitude:
+          type: string
+          description: Longitude coordinate (optional)
+          example: "106.8456"
+          
+    KirimkuPackageRequest:
+      type: object
+      required:
+        - weight
+        - length
+        - width
+        - height
+        - description
+        - value
+      properties:
+        weight:
+          type: integer
+          description: Package weight in grams
+          example: 1000
+          minimum: 1
+        length:
+          type: integer
+          description: Package length in centimeters
+          example: 20
+          minimum: 1
+        width:
+          type: integer
+          description: Package width in centimeters
+          example: 15
+          minimum: 1
+        height:
+          type: integer
+          description: Package height in centimeters
+          example: 10
+          minimum: 1
+        description:
+          type: string
+          description: Package description
+          example: "Electronics - Smartphone"
+        value:
+          type: integer
+          format: int64
+          description: Package value in rupiah
+          example: 5000000
+          minimum: 0
+        category:
+          type: string
+          description: Package category (optional)
+          example: "Electronics"
+          
+    KirimkuBookingRequest:
+      type: object
+      required:
+        - courier_id
+        - service_id
+        - origin
+        - package
+      properties:
+        courier_id:
+          type: string
+          description: Courier ID
+          example: "jnt"
+        service_id:
+          type: string
+          description: Service ID
+          example: "jnt_reg"
+        origin:
+          $ref: '#/components/schemas/KirimkuAddressRequest'
+        destination:
+          allOf:
+            - $ref: '#/components/schemas/KirimkuAddressRequest'
+            - description: "Optional for customer endpoints - auto-populated from warranty address"
+        package:
+          $ref: '#/components/schemas/KirimkuPackageRequest'
+        cod_amount:
+          type: integer
+          format: int64
+          description: Cash on delivery amount in rupiah (optional)
+          example: 0
+          minimum: 0
+        insurance:
+          type: boolean
+          description: Whether to include insurance (optional)
+          example: true
+        notes:
+          type: string
+          description: Additional notes (optional)
+          example: "Handle with care"
+        payment_method:
+          type: string
+          enum: [API_CREDIT, QRCODE, VA, EWALLET]
+          description: Payment method (optional)
+          example: "API_CREDIT"
+        channel:
+          type: string
+          description: Payment channel (optional, required for some payment methods)
+          example: "QRIS"
+          
+    KirimkuBooking:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Internal booking ID
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        booking_id:
+          type: string
+          description: External booking ID from courier
+          example: "JNT123456789"
+        tracking_number:
+          type: string
+          description: Tracking number
+          example: "JT123456789"
+        courier_id:
+          type: string
+          description: Courier ID
+          example: "jnt"
+        service_id:
+          type: string
+          description: Service ID
+          example: "jnt_reg"
+        status:
+          type: string
+          enum: [pending, confirmed, picked_up, in_transit, delivered, cancelled, returned]
+          description: Booking status
+          example: "confirmed"
+        origin:
+          $ref: '#/components/schemas/KirimkuAddressRequest'
+        destination:
+          $ref: '#/components/schemas/KirimkuAddressRequest'
+        package:
+          $ref: '#/components/schemas/KirimkuPackageRequest'
+        shipping_cost:
+          type: integer
+          format: int64
+          description: Shipping cost in rupiah
+          example: 12000
+        insurance_cost:
+          type: integer
+          format: int64
+          description: Insurance cost in rupiah (optional)
+          example: 2500
+        cod_amount:
+          type: integer
+          format: int64
+          description: Cash on delivery amount in rupiah (optional)
+          example: 0
+        total_cost:
+          type: integer
+          format: int64
+          description: Total cost in rupiah
+          example: 14500
+        notes:
+          type: string
+          description: Additional notes (optional)
+          example: "Handle with care"
+        pickup_date:
+          type: string
+          format: date-time
+          description: Estimated pickup date (optional)
+          example: "2024-01-16T09:00:00Z"
+        delivery_date:
+          type: string
+          format: date-time
+          description: Estimated delivery date (optional)
+          example: "2024-01-18T17:00:00Z"
+        created_at:
+          type: string
+          format: date-time
+          description: Creation timestamp
+          example: "2024-01-15T10:30:00Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Last update timestamp
+          example: "2024-01-15T10:30:00Z"
+          
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
+          example: "Error message"
+        error:
+          type: string
+          example: "error_code"
+        meta:
+          type: object
+          properties:
+            request_id:
+              type: string
+              example: "req_123456789"
+            timestamp:
+              type: string
+              format: date-time
+              example: "2024-01-15T10:30:00Z"

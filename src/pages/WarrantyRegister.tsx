@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/contexts/TenantContext";
@@ -11,12 +11,28 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { BarcodeScanner } from "@/components/common/BarcodeScanner";
 import { warrantyService } from "@/services/warrantyService";
-import { Loader2, ArrowLeft, Upload, QrCode, CheckCircle } from "lucide-react";
+import { 
+  ValidateBarcodeResponse,
+  CustomerWarrantyRegistrationRequest,
+  CustomerWarrantyRegistrationResponse
+} from "@/types/warranty";
+import { 
+  QrCode, 
+  Search, 
+  Package, 
+  ShieldCheck, 
+  AlertCircle,
+  CheckCircle,
+  ArrowLeft,
+  Loader2,
+  Upload,
+  FileText
+} from "lucide-react";
 
 /**
  * Warranty Registration Page
  * - New dedicated URL: /warranty/register
- * - Focused flow: scan/enter barcode, minimal customer details, invoice upload
+ * - Focused flow: scan/enter barcode, minimal customer details
  * - Product details are not shown; derived from barcode validation
  * - Location/address removed - only needed for claims
  */
@@ -26,7 +42,16 @@ const WarrantyRegister: React.FC = () => {
 
   // Form state
   const [barcode, setBarcode] = useState<string>(searchParams.get("barcode") || "");
-  const [invoiceFile, setInvoiceFile] = useState<File | null>(null);
+  const [proofOfPurchase, setProofOfPurchase] = useState<File | null>(null);
+  const [proofOfPurchasePreview, setProofOfPurchasePreview] = useState<string>("");
+  // Deprecated: separate upload result; now we send file directly on submit
+  // const [proofOfPurchaseData, setProofOfPurchaseData] = useState<{
+  //   document_type: 'pdf' | 'image';
+  //   document_url: string;
+  //   uploaded_at: string;
+  // } | null>(null);
+  // const [isUploadingProof, setIsUploadingProof] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   // Derived from validation
   const [productSku, setProductSku] = useState<string>("");
@@ -70,7 +95,7 @@ const WarrantyRegister: React.FC = () => {
       try {
         const res = await warrantyService.validateBarcode(barcode);
         if (res.success && res.data) {
-          const data = res.data;
+          const data = res.data as ValidateBarcodeResponse;
           // Pull from either classic or alternate shape
           const sku = data.product?.sku || data.warranty_barcode?.product_id || "";
           const serial = data.warranty?.barcode_value || data.warranty?.barcode || data.warranty_barcode?.barcode_string || barcode;
@@ -109,18 +134,46 @@ const WarrantyRegister: React.FC = () => {
   }, [barcode]);
 
   const isFormValid = useMemo(() => {
-    // Registration now only requires barcode and proof_of_purchase (invoice file)
-    return !!barcode && !!invoiceFile;
-  }, [barcode, invoiceFile]);
+    // Registration requires barcode and a selected proof file
+    return !!barcode && !!proofOfPurchase;
+  }, [barcode, proofOfPurchase]);
+
+  const handleProofOfPurchaseChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      // Validate file size (max 5MB)
+      if (file.size > 5 * 1024 * 1024) {
+        setError("File size must be less than 5MB");
+        return;
+      }
+      
+      // Validate file type
+      const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'application/pdf'];
+      if (!allowedTypes.includes(file.type)) {
+        setError("Please upload a valid image (JPG, PNG) or PDF file");
+        return;
+      }
+
+      // Store the file for preview and submission
+      setProofOfPurchase(file);
+      setError("");
+      
+      // Create preview for images
+      if (file.type.startsWith('image/')) {
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          setProofOfPurchasePreview(evt.target?.result as string);
+        };
+        reader.readAsDataURL(file);
+      } else {
+        setProofOfPurchasePreview("");
+      }
+    }
+  };
 
   const handleScanResult = (code: string) => {
     setBarcode(code);
     setIsScanning(false);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    setInvoiceFile(file);
   };
 
   // Provide MobileNav tab handling consistent with the main Warranty page
@@ -154,6 +207,11 @@ const WarrantyRegister: React.FC = () => {
       return;
     }
 
+    if (!proofOfPurchase) {
+      setError("Please select proof of purchase file");
+      return;
+    }
+
     if (!isFormValid) {
       setError("Please fill all required fields");
       return;
@@ -162,20 +220,25 @@ const WarrantyRegister: React.FC = () => {
     setIsSubmitting(true);
 
     try {
-      // Build FormData for registration: only barcode and proof_of_purchase
+      // Build FormData for registration: barcode and optional proof of purchase
       const formData = new FormData();
       formData.append("barcode", barcode);
-      if (invoiceFile) {
-        formData.append("proof_of_purchase", invoiceFile);
+      
+      // Attach proof file directly to registration request
+      if (proofOfPurchase) {
+        const documentType = proofOfPurchase.type === 'application/pdf' ? 'pdf' : 'image';
+        formData.append("file", proofOfPurchase);
+        formData.append("document_type", documentType);
       }
 
       const res = await warrantyService.registerWarranty(formData);
-      if (res.success && res.data) {
+      if ('success' in res && res.success) {
         setSuccessMessage("Warranty registered successfully! Admin will verify and activate it.");
         // Navigate back to warranties list after short delay
         setTimeout(() => navigate("/warranty"), 1500);
       } else {
-        setError(res.error || res.message || "Failed to register warranty");
+        const errorRes = res as { success: false; error: string; message?: string };
+        setError(errorRes.error || errorRes.message || "Failed to register warranty");
       }
     } catch (err) {
       console.error("Register warranty error", err);
@@ -257,22 +320,66 @@ const WarrantyRegister: React.FC = () => {
               </div>
             </div>
 
-            <Separator className="my-2" />
-
             <div>
-              <Label htmlFor="invoice">Upload Invoice (PDF or Image)</Label>
-              <div className="flex items-center gap-2 mt-1">
-                <Input id="invoice" type="file" accept=".pdf,image/*" onChange={handleFileChange} />
-                {invoiceFile && (
-                  <span className="text-sm text-muted-foreground truncate max-w-xs">
-                    <Upload className="h-4 w-4 inline mr-1" /> {invoiceFile.name}
-                  </span>
-                )}
+              <Label htmlFor="proof_of_purchase" className="block mb-1">Proof of Purchase *</Label>
+                <div className="mt-1">
+                  <input
+                    ref={fileInputRef}
+                    id="proof_of_purchase"
+                    type="file"
+                    accept="image/*,.pdf"
+                    onChange={handleProofOfPurchaseChange}
+                    className="sr-only"
+                  />
+                  <div className="flex items-center h-10">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="h-10"
+                    >
+                      <Upload className="h-4 w-4 mr-2" /> Choose file
+                    </Button>
+                    {proofOfPurchase && (
+                      <span className="ml-3 text-sm text-muted-foreground truncate max-w-[240px]">
+                        {proofOfPurchase.name}
+                      </span>
+                    )}
+                  </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Required. Upload receipt, invoice, or other proof of purchase (JPG, PNG, PDF, max 5MB)
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground mt-1">
-                Upload your purchase invoice for verification
-              </p>
+              
+              {/* Removed immediate upload; file will be sent with registration */}
+              
+              {/* Removed immediate upload status UI; file is attached on submit */}
+              
+              {proofOfPurchase && (
+                <div className="mt-2">
+                  <div className="flex items-center gap-2 text-sm text-green-600">
+                    <CheckCircle className="h-4 w-4" />
+                    <span>File selected</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
+                    <FileText className="h-4 w-4" />
+                    <span>{proofOfPurchase.name} ({proofOfPurchase.type === 'application/pdf' ? 'PDF' : 'IMAGE'})</span>
+                  </div>
+                </div>
+              )}
+              
+              {proofOfPurchasePreview && proofOfPurchase?.type.startsWith('image/') && (
+                <div className="mt-2">
+                  <img
+                    src={proofOfPurchasePreview}
+                    alt="Proof of purchase preview"
+                    className="max-w-xs max-h-32 object-contain border rounded"
+                  />
+                </div>
+              )}
             </div>
+
+            <Separator className="my-2" />
 
             {error && (
               <div className="text-red-600 text-sm">{error}</div>
@@ -284,7 +391,7 @@ const WarrantyRegister: React.FC = () => {
             )}
 
             <div className="flex gap-2 pt-2">
-              <Button type="submit" disabled={!isFormValid || isSubmitting} className="min-w-[160px]">
+              <Button type="submit" disabled={!isFormValid || isSubmitting} className="h-10 px-4">
                 {isSubmitting ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting...

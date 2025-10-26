@@ -122,6 +122,7 @@ export interface SubmitClaimRequest {
   customer_email: string;
   customer_phone?: string;
   customer_address?: string;
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
   // Enhanced claim fields
   courier_type?: string;
   logistic_service?: string;
@@ -140,7 +141,6 @@ export interface SubmitClaimRequest {
     postal_code?: string;
     kelurahan?: string;
   };
-  invoice_attachment_id?: string;
 }
 
 export interface SubmitClaimResponse {
@@ -230,11 +230,7 @@ export interface CustomerRegistrationInfo {
   preferences?: CustomerPreferences;
 }
 
-export interface ProofOfPurchaseInfo {
-  document_type?: string;
-  document_url?: string;
-  uploaded_at?: string;
-}
+
 
 export interface CustomerWarrantyRegistrationRequest {
   barcode_value: string;
@@ -246,7 +242,11 @@ export interface CustomerWarrantyRegistrationRequest {
   retailer_address?: string;
   invoice_number?: string;
   customer_info: CustomerRegistrationInfo;
-  proof_of_purchase?: ProofOfPurchaseInfo;
+  proof_of_purchase?: {
+    document_type: 'pdf' | 'image';
+    document_url?: string;
+    uploaded_at?: string;
+  };
 }
 
 export interface CustomerProductInfo {
@@ -335,11 +335,34 @@ export interface WarrantyServiceResponse<T> {
   message?: string;
 }
 
-// Logistics services for claim submission
+// Logistics services for claim submission (legacy - kept for compatibility)
 export interface LogisticService {
   value: string;
   label: string;
   description: string;
+}
+
+// Enhanced shipping service types
+export interface ShippingCourierOption {
+  value: string; // Format: "courierId-serviceId"
+  label: string; // Format: "Courier Name - Service Name"
+  description: string; // Format: "X days - Rp Y"
+  cost: number;
+  estimatedDays: string;
+  courierId: string;
+  serviceId: string;
+}
+
+export interface ShippingLocationOption {
+  id?: string;
+  area_id: string;
+  name: string;
+  type?: 'province' | 'city' | 'district' | 'area';
+  province?: string;
+  city?: string;
+  district?: string;
+  postal_code?: string;
+  full_address?: string;
 }
 
 // Claim form data (for UI)
@@ -349,8 +372,9 @@ export interface ClaimFormData {
   email: string;
   phone: string;
   address: string;
-  invoiceFile: File | null;
   logisticService: string;
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  invoiceFile?: File;
 }
 
 // Pagination helper

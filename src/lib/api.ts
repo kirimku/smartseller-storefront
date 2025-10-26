@@ -8,6 +8,7 @@ import { getApiBaseDomain } from '@/utils/subdomain';
 import { tokenRefreshInterceptor } from '@/services/tokenRefreshInterceptor';
 import { tenantAwareApiClient, TenantAwareRequestConfig } from './tenantAwareApiClient';
 import { tenantResolver } from '@/services/tenantResolver';
+import { secureTokenStorage } from '@/services/secureTokenStorage';
 
 // API Configuration
 export const API_CONFIG = {
@@ -62,6 +63,7 @@ export class SmartSellerApiClient {
     const resolution = tenantResolver.resolveTenant();
     this.tenantId = resolution.tenantId;
     this.initializeTenantAwareClient();
+    this.setupAuthSync();
   }
 
   // Initialize tenant-aware client
@@ -73,6 +75,28 @@ export class SmartSellerApiClient {
         console.warn('Failed to initialize tenant-aware client:', error);
         this.useTenantAwareRouting = false;
       }
+    }
+  }
+
+  // Keep API client auth token in sync with secure storage
+  private setupAuthSync(): void {
+    try {
+      const token = secureTokenStorage.getAccessToken();
+      if (token) {
+        void this.setAuthToken(token);
+      }
+
+      if (typeof window !== 'undefined') {
+        window.addEventListener('tokenUpdate', async () => {
+          const updated = secureTokenStorage.getAccessToken();
+          await this.setAuthToken(updated);
+        });
+        window.addEventListener('tokenClear', async () => {
+          await this.setAuthToken(null);
+        });
+      }
+    } catch (err) {
+      console.warn('Auth sync setup failed:', err);
     }
   }
 
@@ -141,6 +165,14 @@ export class SmartSellerApiClient {
       requiresAuth = false,
       tenantConfig,
     } = options;
+
+    // Attempt to hydrate token from secure storage just-in-time
+    if (requiresAuth && !this.authToken) {
+      const storedToken = secureTokenStorage.getAccessToken();
+      if (storedToken) {
+        await this.setAuthToken(storedToken);
+      }
+    }
 
     // Check authentication if required
     if (requiresAuth && !this.authToken) {
