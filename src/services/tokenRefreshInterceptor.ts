@@ -135,11 +135,10 @@ class TokenRefreshInterceptor {
     const existingHeaders = (options.headers as Record<string, string>) || {};
     const hasAuthHeader = 'Authorization' in existingHeaders || 'authorization' in existingHeaders;
 
-    // Only add X-Storefront-Slug header to internal API requests
-    const isInternalRequest = url && (url.includes(this.config.baseURL) || url.startsWith('/'));
+    // Always add X-Storefront-Slug header
     const baseHeaders = {
       ...existingHeaders,
-      ...(isInternalRequest ? { 'X-Storefront-Slug': 'rexus' } : {})
+      'X-Storefront-Slug': 'rexus'
     };
 
     // If the request already has Authorization, normalize and update it
@@ -357,12 +356,10 @@ class AxiosStyleInterceptor {
     const currentHeaders = (config.headers as Record<string, string>) || {};
     const hasAuthHeader = 'Authorization' in currentHeaders || 'authorization' in currentHeaders;
 
-    // Only add X-Storefront-Slug header to internal API requests
-    const baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
-    const isInternalRequest = config.url && (config.url.includes(baseURL) || config.url.startsWith('/'));
+    // Always add X-Storefront-Slug header
     config.headers = {
       ...currentHeaders,
-      ...(isInternalRequest ? { 'X-Storefront-Slug': 'rexus' } : {}),
+      'X-Storefront-Slug': 'rexus',
     };
 
     if (accessToken && config.url && !this.isExcludedEndpoint(config.url) && !hasAuthHeader) {
