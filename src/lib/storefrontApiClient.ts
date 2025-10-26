@@ -185,7 +185,6 @@ export class StorefrontApiClient {
     const hasBody = options.body !== undefined && options.body !== null;
     const headers: Record<string, string> = {
       ...providedHeaders,
-      'X-Storefront-Slug': storefrontSlug,
       ...(hasBody ? { 'Content-Type': providedHeaders['Content-Type'] || 'application/json' } : {}),
     };
 
