@@ -263,6 +263,8 @@ export class TenantResolver implements TenantDatabaseResolver {
    * Get API base URL for a specific tenant
    */
   getTenantApiUrl(tenantId: string): string {
+    console.log('🔍 [TenantResolver] getTenantApiUrl called with tenantId:', tenantId);
+    
     // const resolution = this.resolveTenant();
     
     // if (resolution.isLocalhost || this.config.developmentMode) {
@@ -285,7 +287,9 @@ export class TenantResolver implements TenantDatabaseResolver {
 
     // Fallback to configured API domain
     // return `https://${this.config.apiBaseDomain}`;
-    return `https://smartseller-api.preproduction.kirimku.com`
+    const hardcodedUrl = `https://smartseller-api.preproduction.kirimku.com`;
+    console.log('🔍 [TenantResolver] Returning hardcoded URL:', hardcodedUrl);
+    return hardcodedUrl;
   }
 
   /**
@@ -298,7 +302,8 @@ export class TenantResolver implements TenantDatabaseResolver {
     }
 
     // In development, short-circuit to SHARED to avoid network errors
-    if (this.config.developmentMode) {
+    // if (this.config.developmentMode) {
+    if (true) {
       const devType = TenantType.SHARED;
       this.typeCache.set(tenantId, devType);
       return devType;
@@ -386,23 +391,34 @@ export class TenantResolver implements TenantDatabaseResolver {
   }
 
   private buildApiBaseUrl(tenantId: string | null, isLocalhost: boolean): string {
+    console.log('🔍 [TenantResolver] buildApiBaseUrl called with:', { tenantId, isLocalhost, developmentMode: this.config.developmentMode });
+    
     if (isLocalhost || this.config.developmentMode) {
       const envBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8090';
+      console.log('🔍 [TenantResolver] Using localhost/dev mode, envBase:', envBase);
+      console.log('🔍 [TenantResolver] VITE_API_BASE_URL from env:', import.meta.env.VITE_API_BASE_URL);
       return envBase;
     }
 
     // Check if we have a preproduction API URL from environment
     const preproductionApiUrl = import.meta.env.VITE_API_URL;
+    console.log('🔍 [TenantResolver] VITE_API_URL from env:', preproductionApiUrl);
     if (preproductionApiUrl) {
       // Remove /api/v1 suffix if present to get base URL
-      return preproductionApiUrl.replace(/\/api\/v1$/, '');
+      const finalUrl = preproductionApiUrl.replace(/\/api\/v1$/, '');
+      console.log('🔍 [TenantResolver] Using preproduction API URL:', finalUrl);
+      return finalUrl;
     }
 
     if (tenantId && this.config.apiBaseDomain.includes('{tenant}')) {
-      return `https://${this.config.apiBaseDomain.replace('{tenant}', tenantId)}`;
+      const tenantUrl = `https://${this.config.apiBaseDomain.replace('{tenant}', tenantId)}`;
+      console.log('🔍 [TenantResolver] Using tenant-specific URL:', tenantUrl);
+      return tenantUrl;
     }
 
-    return `https://${this.config.apiBaseDomain}`;
+    const fallbackUrl = `https://${this.config.apiBaseDomain}`;
+    console.log('🔍 [TenantResolver] Using fallback URL:', fallbackUrl);
+    return fallbackUrl;
   }
 }
 

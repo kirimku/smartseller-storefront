@@ -328,7 +328,7 @@ all: clean build test-local push ## Run complete build and deployment pipeline
 multi-arch-build: check-env ## Build multi-architecture image (amd64, arm64)
 	@echo "$(BLUE)Building multi-architecture image...$(NC)"
 	@docker buildx create --use --name $(APP_NAME)-builder 2>/dev/null || true
-	@docker buildx build --platform linux/amd64,linux/arm64 \
+	@docker buildx build --no-cache --platform linux/amd64,linux/arm64 \
 		-t $(DOCKER_TAG) -t $(LATEST_TAG) \
 		--push .
 	@echo "$(GREEN)Multi-architecture build completed!$(NC)"

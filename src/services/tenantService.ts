@@ -84,17 +84,27 @@ export class TenantService {
    */
   async getTenantBySlug(slug: string): Promise<TenantConfig | null> {
     try {
+      console.log('🔍 [TenantService] getTenantBySlug called with slug:', slug);
+      
       // Use tenant resolver to get the appropriate API URL
       const apiUrl = tenantResolver.getTenantApiUrl(slug);
-      const response = await apiClient.get<TenantApiResponse>(`${apiUrl}/api/tenants/${slug}`);
+      console.log('🔍 [TenantService] Got API URL from resolver:', apiUrl);
+      
+      const fullUrl = `${apiUrl}/api/tenants/${slug}`;
+      console.log('🔍 [TenantService] Making API call to:', fullUrl);
+      
+      const response = await apiClient.get<TenantApiResponse>(fullUrl);
+      console.log('🔍 [TenantService] API response:', response);
       
       if (response.success && response.data?.success && response.data.data) {
+        console.log('🔍 [TenantService] Successfully got tenant data:', response.data.data);
         return response.data.data;
       }
       
+      console.log('🔍 [TenantService] No tenant data found in response');
       return null;
     } catch (error) {
-      console.error('Failed to fetch tenant configuration by slug:', error);
+      console.error('🔍 [TenantService] Failed to fetch tenant configuration by slug:', error);
       throw handleApiError(error);
     }
   }
