@@ -222,23 +222,18 @@ const WarrantyRegister: React.FC = () => {
     try {
       // Build FormData for registration: barcode and optional proof of purchase
       const formData = new FormData();
-      formData.append("barcode", barcode);
-      
-      // Attach proof file directly to registration request
+      formData.append('barcode', barcode);
       if (proofOfPurchase) {
-        const documentType = proofOfPurchase.type === 'application/pdf' ? 'pdf' : 'image';
-        formData.append("file", proofOfPurchase);
-        formData.append("document_type", documentType);
+        formData.append('proof_of_purchase', proofOfPurchase);
       }
-
       const res = await warrantyService.registerWarranty(formData);
       if ('success' in res && res.success) {
-        setSuccessMessage("Warranty registered successfully! Admin will verify and activate it.");
+        setSuccessMessage('Warranty registered successfully!');
         // Navigate back to warranties list after short delay
-        setTimeout(() => navigate("/warranty"), 1500);
+        setTimeout(() => navigate('/warranty'), 1500);
       } else {
         const errorRes = res as { success: false; error: string; message?: string };
-        setError(errorRes.error || errorRes.message || "Failed to register warranty");
+        setError(errorRes.error || errorRes.message || 'Failed to register warranty');
       }
     } catch (err) {
       console.error("Register warranty error", err);

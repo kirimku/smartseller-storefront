@@ -322,7 +322,7 @@ export class WarrantyService {
   > {
     try {
       // Use storefront customer register endpoint (also accepts file upload via multipart)
-      const url = this.buildWarrantyUrl('warranty/customer/warranties/register');
+      const url = this.buildWarrantyUrl('warranties/register');
 
       const isFormData = typeof FormData !== 'undefined' && data instanceof FormData;
 
@@ -661,17 +661,18 @@ export class WarrantyService {
   /**
    * Upload proof of purchase document for warranty registration
    */
-  async uploadProofOfPurchase(file: File): Promise<WarrantyServiceResponse<{ document_url: string; document_type: 'pdf' | 'image' }>> {
+  async uploadProofOfPurchase(file: File, documentType: 'receipt' | 'invoice' | 'purchase_order' | 'warranty_card' = 'receipt'): Promise<WarrantyServiceResponse<{ document_url: string; document_type: string }>> {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('document_type', documentType);
 
-      const url = this.buildWarrantyUrl('warranty/customer/registration/proof-of-purchase/upload');
+      const url = this.buildWarrantyUrl('warranties/upload-proof');
 
       const response = await this.makeRequest<{ 
         success: boolean; 
         message: string; 
-        data: { document_url: string; document_type: 'pdf' | 'image'; file_name: string; file_size: number } 
+        data: { document_url: string; document_type: string; file_name: string; file_size: number } 
       }>(url, {
         method: 'POST',
         body: formData,
