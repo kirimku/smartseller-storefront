@@ -26,9 +26,9 @@ ENV PORT=5173
 # Set working directory
 WORKDIR /app
 
-# Copy package files and install production dependencies
+# Copy package files and install all dependencies (including dev dependencies for development mode)
 COPY package*.json ./
-RUN npm ci --development
+RUN npm ci
 
 # Copy built app from build stage
 COPY --from=build /app/dist ./dist

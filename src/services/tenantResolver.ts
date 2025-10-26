@@ -348,6 +348,13 @@ export class TenantResolver implements TenantDatabaseResolver {
   }
 
   /**
+   * Get development mode status
+   */
+  isDevelopmentMode(): boolean {
+    return this.config.developmentMode;
+  }
+
+  /**
    * Private helper methods
    */
   private isLocalhostEnvironment(hostname: string): boolean {

@@ -223,9 +223,8 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
       setIsLoading(true);
       setError(null);
       
-      // Use mock data in development OR when running on localhost (for Docker containers)
-      const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-      if (import.meta.env.DEV || isLocalhost) {
+      // Use the tenant resolver to determine if we should use mock data
+      if (tenantResolver.isDevelopmentMode()) {
         const tenantConfig = mockTenants[detectedSubdomain];
         if (tenantConfig) {
           setTenant(tenantConfig);
