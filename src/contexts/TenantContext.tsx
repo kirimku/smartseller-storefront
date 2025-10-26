@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { TenantConfig } from '@/types/tenant';
-import { getApiBaseDomain } from '@/utils/subdomain';
 import { tenantResolver, TenantResolutionInfo, TenantType } from '@/services/tenantResolver';
 import { slugDetectionService, SlugDetectionResult } from '@/services/slugDetectionService';
 
@@ -238,7 +237,7 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
       }
       
       // In production with real domain, fetch from SmartSeller API
-      const apiBaseUrl = getApiBaseDomain();
+      const apiBaseUrl = tenantResolver.getTenantApiUrl(detectedSubdomain);
       const response = await fetch(`${apiBaseUrl}/api/tenants/${detectedSubdomain}`);
       if (!response.ok) {
         throw new Error(`Failed to load tenant configuration: ${response.statusText}`);
@@ -301,10 +300,6 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
       setError(null);
 
       try {
-        // Initialize API base URL
-        const baseUrl = getApiBaseDomain();
-        setApiBaseUrl(baseUrl);
-
         // Use the new tenant resolver to detect tenant
         const resolution = tenantResolver.resolveTenant();
         setTenantResolution(resolution);
@@ -355,7 +350,7 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
   };
 
   const getTenantApiUrl = (): string => {
-    return apiBaseUrl || getApiBaseDomain();
+    return apiBaseUrl || tenantResolver.getTenantApiUrl(slug || 'rexus');
   };
 
   const contextValue: TenantContextType = {
@@ -368,7 +363,7 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
     tenantResolution,
     slugDetection,
     tenantType,
-    apiBaseUrl: apiBaseUrl || getApiBaseDomain(),
+    apiBaseUrl: apiBaseUrl || tenantResolver.getTenantApiUrl(slug || 'rexus'),
     refreshTenant,
     validateSlug,
     getTenantApiUrl,

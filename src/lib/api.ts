@@ -4,14 +4,13 @@
  * Enhanced with tenant-aware routing capabilities
  */
 
-import { getApiBaseDomain } from '@/utils/subdomain';
 import { tokenRefreshInterceptor } from '@/services/tokenRefreshInterceptor';
 import { tenantAwareApiClient, TenantAwareRequestConfig } from './tenantAwareApiClient';
 import { tenantResolver } from '@/services/tenantResolver';
 
 // API Configuration
 export const API_CONFIG = {
-  baseUrl: getApiBaseDomain(),
+  baseUrl: tenantResolver.getTenantApiUrl('rexus'), // Default to rexus, will be overridden by tenant resolution
   timeout: 30000,
   retries: 3,
   retryDelay: 1000,

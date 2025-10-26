@@ -265,31 +265,35 @@ export class TenantResolver implements TenantDatabaseResolver {
   getTenantApiUrl(tenantId: string): string {
     console.log('🔍 [TenantResolver] getTenantApiUrl called with tenantId:', tenantId);
     
-    // const resolution = this.resolveTenant();
+    const resolution = this.resolveTenant();
     
-    // if (resolution.isLocalhost || this.config.developmentMode) {
-    //   // Development mode - use env override when available
-    //   const envBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8090';
-    //   return envBase;
-    // }
+    if (resolution.isLocalhost || this.config.developmentMode) {
+      // Development mode - use env override when available
+      const envBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8090';
+      console.log('🔍 [TenantResolver] Using development mode, envBase:', envBase);
+      return envBase;
+    }
 
-    // // Check if we have a preproduction API URL from environment
-    // const preproductionApiUrl = import.meta.env.VITE_API_URL;
-    // if (preproductionApiUrl) {
-    //   // Remove /api/v1 suffix if present to get base URL
-    //   return preproductionApiUrl.replace(/\/api\/v1$/, '');
-    // }
+    // Check if we have a preproduction API URL from environment
+    const preproductionApiUrl = import.meta.env.VITE_API_URL;
+    if (preproductionApiUrl) {
+      // Remove /api/v1 suffix if present to get base URL
+      const finalUrl = preproductionApiUrl.replace(/\/api\/v1$/, '');
+      console.log('🔍 [TenantResolver] Using preproduction API URL:', finalUrl);
+      return finalUrl;
+    }
 
-    // // Production mode - use tenant-aware API URL
-    // if (this.config.apiBaseDomain.includes('{tenant}')) {
-    //   return `https://${this.config.apiBaseDomain.replace('{tenant}', tenantId)}`;
-    // }
+    // Production mode - use tenant-aware API URL
+    if (this.config.apiBaseDomain.includes('{tenant}')) {
+      const tenantUrl = `https://${this.config.apiBaseDomain.replace('{tenant}', tenantId)}`;
+      console.log('🔍 [TenantResolver] Using tenant-specific URL:', tenantUrl);
+      return tenantUrl;
+    }
 
     // Fallback to configured API domain
-    // return `https://${this.config.apiBaseDomain}`;
-    const hardcodedUrl = `https://smartseller-api.preproduction.kirimku.com`;
-    console.log('🔍 [TenantResolver] Returning hardcoded URL:', hardcodedUrl);
-    return hardcodedUrl;
+    const fallbackUrl = `https://${this.config.apiBaseDomain}`;
+    console.log('🔍 [TenantResolver] Using fallback URL:', fallbackUrl);
+    return fallbackUrl;
   }
 
   /**
