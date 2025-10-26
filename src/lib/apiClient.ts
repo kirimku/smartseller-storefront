@@ -17,7 +17,7 @@ import type {
 // Base configuration for the API client
 const createApiConfiguration = (): Configuration => {
   return new Configuration({
-    basePath: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8090',
+    basePath: import.meta.env.VITE_API_BASE_URL || 'https://smartseller-api.preproduction.kirimku.com',
     baseOptions: {
       headers: {
         'Content-Type': 'application/json',
@@ -45,7 +45,7 @@ export class SmartSellerApiClient {
 
   private getConfiguration(): Configuration {
     return new Configuration({
-      basePath: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8090',
+      basePath: import.meta.env.VITE_API_BASE_URL || 'https://smartseller-api.preproduction.kirimku.com',
       baseOptions: {
         headers: {
           'Content-Type': 'application/json',

@@ -143,7 +143,7 @@ export const getApiBaseDomain = (): string => {
   
   if (isLocalhost) {
     // For development, prefer env base URL; fallback to localhost:8080
-    const envBase = (import.meta as any).env?.VITE_API_BASE_URL || 'http://localhost:8090';
+    const envBase = (import.meta as any).env?.VITE_API_BASE_URL || 'https://smartseller-api.preproduction.kirimku.com';
     return envBase;
   }
   

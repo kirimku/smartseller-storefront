@@ -85,7 +85,7 @@ export class WarrantyService {
 
   constructor() {
     this.apiClient = new StorefrontApiClient();
-    this.baseUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8090';
+    this.baseUrl = import.meta.env.VITE_API_BASE_URL || 'https://smartseller-api.preproduction.kirimku.com';
     this.initializeStorefront();
   }
 

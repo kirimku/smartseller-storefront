@@ -269,7 +269,7 @@ export class TenantResolver implements TenantDatabaseResolver {
     
     if (resolution.isLocalhost || this.config.developmentMode) {
       // Development mode - use env override when available
-      const envBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8090';
+      const envBase = import.meta.env.VITE_API_BASE_URL ?? 'https://smartseller-api.preproduction.kirimku.com';
       console.log('🔍 [TenantResolver] Using development mode, envBase:', envBase);
       return envBase;
     }
@@ -405,7 +405,7 @@ export class TenantResolver implements TenantDatabaseResolver {
     console.log('🔍 [TenantResolver] buildApiBaseUrl called with:', { tenantId, isLocalhost, developmentMode: this.config.developmentMode });
     
     if (isLocalhost || this.config.developmentMode) {
-      const envBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8090';
+      const envBase = import.meta.env.VITE_API_BASE_URL ?? 'https://smartseller-api.preproduction.kirimku.com';
       console.log('🔍 [TenantResolver] Using localhost/dev mode, envBase:', envBase);
       console.log('🔍 [TenantResolver] VITE_API_BASE_URL from env:', import.meta.env.VITE_API_BASE_URL);
       return envBase;

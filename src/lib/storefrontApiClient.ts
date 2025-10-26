@@ -139,7 +139,7 @@ export class StorefrontApiClient {
   private accessToken: string | null = null;
 
   constructor(baseUrl?: string) {
-    this.baseUrl = baseUrl || import.meta.env.VITE_API_BASE_URL || 'http://localhost:8090';
+    this.baseUrl = baseUrl || import.meta.env.VITE_API_BASE_URL || 'https://smartseller-api.preproduction.kirimku.com';
   }
 
   /**

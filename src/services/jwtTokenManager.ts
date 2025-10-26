@@ -70,7 +70,7 @@ class JWTTokenManager {
   private retryDelay = 1000; // 1 second
   private eventListeners: Map<TokenEventType, Array<(event: TokenEvent) => void>> = new Map();
   private refreshTimer: NodeJS.Timeout | null = null;
-  private baseURL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8090';
+  private baseURL = import.meta.env.VITE_API_BASE_URL || 'https://smartseller-api.preproduction.kirimku.com';
 
   private constructor() {
     this.initializeEventListeners();

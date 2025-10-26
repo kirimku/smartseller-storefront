@@ -85,10 +85,10 @@ vi.mock('@/contexts/TenantContext', () => ({
       alternatives: [],
     },
     tenantType: 'subdomain' as const,
-    apiBaseUrl: 'http://localhost:8090',
+    apiBaseUrl: 'https://smartseller-api.preproduction.kirimku.com',
     refreshTenant: async () => {},
     validateSlug: async () => true,
-    getTenantApiUrl: () => 'http://localhost:8090',
+    getTenantApiUrl: () => 'https://smartseller-api.preproduction.kirimku.com',
   }),
 }))
 

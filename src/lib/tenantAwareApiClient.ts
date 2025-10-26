@@ -134,7 +134,7 @@ export class TenantAwareApiClient {
    * Get default API URL for fallback scenarios
    */
   private getDefaultApiUrl(): string {
-    return import.meta.env.VITE_API_BASE_URL || 'http://localhost:8090';
+    return import.meta.env.VITE_API_BASE_URL || 'https://smartseller-api.preproduction.kirimku.com';
   }
 
   /**
