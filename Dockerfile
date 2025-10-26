@@ -14,13 +14,13 @@ RUN npm ci
 COPY . .
 
 # Build the application for production
-RUN npm run build:prod
+RUN npm run build:dev
 
 # Production stage
 FROM --platform=linux/amd64 node:20-alpine
 
 # Set environment variables
-ENV NODE_ENV=production
+ENV NODE_ENV=development
 ENV PORT=5173
 
 # Set working directory
@@ -28,7 +28,7 @@ WORKDIR /app
 
 # Copy package files and install production dependencies
 COPY package*.json ./
-RUN npm ci --production
+RUN npm ci --development
 
 # Copy built app from build stage
 COPY --from=build /app/dist ./dist
