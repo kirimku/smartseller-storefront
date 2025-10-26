@@ -1,8 +1,9 @@
 # Build stage
 FROM --platform=linux/amd64 node:20-alpine as build
 
-# Accept build argument for API URL
-ARG VITE_API_URL=https://api.preproduction.kirimku.com
+# Accept build arguments for API URL and tenant slug
+ARG VITE_API_URL=https://smartseller-api.preproduction.kirimku.com
+ARG VITE_TENANT_SLUG=rexus
 
 # Set working directory
 WORKDIR /app
@@ -16,8 +17,9 @@ RUN npm ci
 # Copy all files
 COPY . .
 
-# Set environment variable for build
+# Set environment variables for build
 ENV VITE_API_URL=${VITE_API_URL}
+ENV VITE_TENANT_SLUG=${VITE_TENANT_SLUG}
 
 # Build the application for production
 RUN npm run build:prod

@@ -80,11 +80,17 @@ export class TenantResolver implements TenantDatabaseResolver {
     const isLocalhost = this.isLocalhostEnvironment(hostname);
     const domain = this.extractDomain(hostname);
     
-    let tenantId: string | null = null;
-    let slug: string | null = null;
+    // Hardcode tenant slug to "rexus" - can be overridden by environment variable
+    const Tenant = import.meta.env.VITE_TENANT_SLUG || 'rexus';
+    let tenantId: string | null = Tenant;
+    let slug: string | null = Tenant;
     let subdomain: string | null = null;
     let detectionMethod: TenantResolutionInfo['detectionMethod'] = 'none';
 
+    // Tenant is hardcoded to "rexus" - detection methods are disabled
+    // Uncomment the methods below if you want to re-enable dynamic tenant detection
+    
+    /*
     // Method 1: Subdomain detection (primary method)
     if (!isLocalhost) {
       const subdomainInfo = this.extractSubdomain(hostname);
@@ -122,6 +128,7 @@ export class TenantResolver implements TenantDatabaseResolver {
       slug = this.config.defaultTenant;
       detectionMethod = 'none'; // No detection method used, using default
     }
+    */
 
     return {
       tenantId,
@@ -139,7 +146,9 @@ export class TenantResolver implements TenantDatabaseResolver {
    */
   async getTenantBySlug(slug: string): Promise<TenantConfig | null> {
     // Dev-mode short-circuit to avoid network calls
-    if (this.config.developmentMode || import.meta.env.DEV) {
+    // TODO: fix this routing development mode
+    // if (this.config.developmentMode || import.meta.env.DEV || true) {
+    if (true) {
       const mock: TenantConfig = {
         id: `tenant-${slug}`,
         name: slug.charAt(0).toUpperCase() + slug.slice(1),
@@ -254,21 +263,29 @@ export class TenantResolver implements TenantDatabaseResolver {
    * Get API base URL for a specific tenant
    */
   getTenantApiUrl(tenantId: string): string {
-    const resolution = this.resolveTenant();
+    // const resolution = this.resolveTenant();
     
-    if (resolution.isLocalhost || this.config.developmentMode) {
-      // Development mode - use env override when available
-      const envBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8090';
-      return envBase;
-    }
+    // if (resolution.isLocalhost || this.config.developmentMode) {
+    //   // Development mode - use env override when available
+    //   const envBase = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8090';
+    //   return envBase;
+    // }
 
-    // Production mode - use tenant-aware API URL
-    if (this.config.apiBaseDomain.includes('{tenant}')) {
-      return this.config.apiBaseDomain.replace('{tenant}', tenantId);
-    }
+    // // Check if we have a preproduction API URL from environment
+    // const preproductionApiUrl = import.meta.env.VITE_API_URL;
+    // if (preproductionApiUrl) {
+    //   // Remove /api/v1 suffix if present to get base URL
+    //   return preproductionApiUrl.replace(/\/api\/v1$/, '');
+    // }
 
-    // Fallback to subdomain pattern
-    return `https://${tenantId}.${this.config.apiBaseDomain}`;
+    // // Production mode - use tenant-aware API URL
+    // if (this.config.apiBaseDomain.includes('{tenant}')) {
+    //   return `https://${this.config.apiBaseDomain.replace('{tenant}', tenantId)}`;
+    // }
+
+    // Fallback to configured API domain
+    // return `https://${this.config.apiBaseDomain}`;
+    return `https://smartseller-api.preproduction.kirimku.com`
   }
 
   /**
@@ -374,11 +391,18 @@ export class TenantResolver implements TenantDatabaseResolver {
       return envBase;
     }
 
-    if (tenantId && this.config.apiBaseDomain.includes('{tenant}')) {
-      return this.config.apiBaseDomain.replace('{tenant}', tenantId);
+    // Check if we have a preproduction API URL from environment
+    const preproductionApiUrl = import.meta.env.VITE_API_URL;
+    if (preproductionApiUrl) {
+      // Remove /api/v1 suffix if present to get base URL
+      return preproductionApiUrl.replace(/\/api\/v1$/, '');
     }
 
-    return this.config.apiBaseDomain;
+    if (tenantId && this.config.apiBaseDomain.includes('{tenant}')) {
+      return `https://${this.config.apiBaseDomain.replace('{tenant}', tenantId)}`;
+    }
+
+    return `https://${this.config.apiBaseDomain}`;
   }
 }
 
@@ -387,11 +411,11 @@ export class TenantResolver implements TenantDatabaseResolver {
  */
 export const defaultTenantResolverConfig: TenantResolverConfig = {
   defaultTenant: 'rexus', // Default for development
-  apiBaseDomain: 'api.smartseller.com',
+  apiBaseDomain: 'smartseller-api.preproduction.kirimku.com',
   enablePathBasedRouting: false,
   enableQueryParamFallback: true,
   productionDomains: ['smartseller.com'],
-  developmentMode: import.meta.env.DEV,
+  developmentMode: import.meta.env.DEV || true,
 };
 
 /**

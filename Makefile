@@ -18,7 +18,8 @@ BLUE := \033[0;34m
 NC := \033[0m # No Color
 
 # Environment-specific variables
-VITE_API_URL := https://api.preproduction.kirimku.com
+VITE_API_URL := https://smartseller-api.preproduction.kirimku.com
+VITE_TENANT_SLUG := rexus
 
 # Default target
 .DEFAULT_GOAL := help
@@ -74,7 +75,7 @@ build-preprod: check-env ## Build Docker image for preproduction
 	@echo "$(BLUE)Building preproduction Docker image...$(NC)"
 	@echo "$(YELLOW)Tag: $(DOCKER_TAG)$(NC)"
 	@echo "$(BLUE)Using API URL: $(VITE_API_URL)$(NC)"
-	@docker build -f Dockerfile.preprod --build-arg VITE_API_URL=$(VITE_API_URL) -t $(DOCKER_TAG) .
+	@docker build -f Dockerfile.preprod --build-arg VITE_API_URL=$(VITE_API_URL) --build-arg VITE_TENANT_SLUG=$(VITE_TENANT_SLUG) -t $(DOCKER_TAG) .
 	@echo "$(GREEN)Preproduction build completed successfully!$(NC)"
 	@echo "$(BLUE)Image size:$(NC)"
 	@docker images $(IMAGE_NAME) --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
@@ -92,7 +93,7 @@ build-preprod-no-cache: check-env ## Build preproduction Docker image without ca
 	@echo "$(YELLOW)Tag: $(DOCKER_TAG)$(NC)"
 	@echo "$(BLUE)Using API URL: $(VITE_API_URL)$(NC)"
 	@echo "$(YELLOW)Note: This will take longer as it rebuilds all layers from scratch$(NC)"
-	@docker build --no-cache -f Dockerfile.preprod --build-arg VITE_API_URL=$(VITE_API_URL) -t $(DOCKER_TAG) .
+	@docker build --no-cache -f Dockerfile.preprod --build-arg VITE_API_URL=$(VITE_API_URL) --build-arg VITE_TENANT_SLUG=$(VITE_TENANT_SLUG) -t $(DOCKER_TAG) .
 	@echo "$(GREEN)Preproduction build (no cache) completed successfully!$(NC)"
 	@echo "$(BLUE)Image size:$(NC)"
 	@docker images $(IMAGE_NAME) --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
@@ -136,8 +137,8 @@ test-preprod: build-preprod ## Test preproduction Docker image with API endpoint
 		docker exec $(APP_NAME)-preprod-test grep -r "api" /app/dist -r || echo "No standard API references found"; \
 		echo "$(BLUE)Looking for localhost references:$(NC)"; \
 		docker exec $(APP_NAME)-preprod-test grep -r "localhost" /app/dist -r || echo "No localhost references found"; \
-		if docker exec $(APP_NAME)-preprod-test grep -r "api.preproduction.kirimku.com/api/v1" /app/dist -r || \
-		   docker exec $(APP_NAME)-preprod-test grep -r "api.preproduction.kirimku.com" /app/dist -r; then \
+		if docker exec $(APP_NAME)-preprod-test grep -r "smartseller-api.preproduction.kirimku.com/api/v1" /app/dist -r || \
+		   docker exec $(APP_NAME)-preprod-test grep -r "smartseller-api.preproduction.kirimku.com" /app/dist -r; then \
 			echo "$(GREEN)✓ Correct API URL verified in build!$(NC)"; \
 		else \
 			echo "$(RED)✗ Failed to find exact API URL string in build. This might be due to code minification.$(NC)"; \
