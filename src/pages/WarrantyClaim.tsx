@@ -10,12 +10,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 import { Separator } from "@/components/ui/separator";
-import { Loader2, ArrowLeft, Upload, Truck, CheckCircle, MapPin } from "lucide-react";
+import { Loader2, ArrowLeft, Truck, CheckCircle, MapPin } from "lucide-react";
 import { warrantyService } from "@/services/warrantyService";
-import { type ClaimFormData, type SubmitClaimRequest, type LogisticService } from "@/types/warranty";
+import { shippingService } from "@/services/shippingService";
+import { type ClaimFormData, type SubmitClaimRequest, type LogisticService, type ShippingCourierOption, type ShippingLocationOption } from "@/types/warranty";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/contexts/TenantContext";
 import AddressPicker, { type AddressPickerValue } from "@/components/common/AddressPicker";
+import { toast } from "sonner";
 
 /**
  * Warranty Claim Page
@@ -24,14 +26,7 @@ import AddressPicker, { type AddressPickerValue } from "@/components/common/Addr
  * - Requires authentication; redirects to login if unauthenticated
  * - Includes detailed address, courier selection, and payment method
  */
-const logisticServices: LogisticService[] = [
-  { value: "jne", label: "JNE Express", description: "2-3 business days" },
-  { value: "jnt", label: "J&T Express", description: "1-2 business days" },
-  { value: "sicepat", label: "SiCepat", description: "2-4 business days" },
-  { value: "anteraja", label: "AnterAja", description: "2-3 business days" },
-  { value: "pos", label: "Pos Indonesia", description: "3-5 business days" },
-];
-
+// Courier types remain static for now
 const courierTypes = [
   { value: "pickup", label: "Pickup Service", description: "Courier will pick up the product from your location" },
   { value: "dropoff", label: "Drop-off Service", description: "You drop off the product at service center" },
@@ -45,7 +40,7 @@ const WarrantyClaim: React.FC = () => {
 
   // Auth guard
   const { isAuthenticated, isLoading, user } = useAuth();
-  const { isLoading: tenantLoading } = useTenant();
+  const { isLoading: tenantLoading, slug } = useTenant();
   useEffect(() => {
     if (tenantLoading || isLoading) return;
     if (!isAuthenticated) {
@@ -68,6 +63,11 @@ const WarrantyClaim: React.FC = () => {
   // Payment method is fixed to QRIS
   const paymentMethod = PAYMENT_METHOD;
 
+  // Shipping-related states
+  const [destinationAddress, setDestinationAddress] = useState<ShippingLocationOption | null>(null);
+  const [availableCouriers, setAvailableCouriers] = useState<ShippingCourierOption[]>([]);
+  const [loadingCouriers, setLoadingCouriers] = useState<boolean>(false);
+
   // Form state
   const [claimForm, setClaimForm] = useState<ClaimFormData>({
     issueDescription: "",
@@ -75,7 +75,6 @@ const WarrantyClaim: React.FC = () => {
     email: "",
     phone: "",
     address: "",
-    invoiceFile: null,
     logisticService: "",
   });
 
@@ -116,6 +115,70 @@ const WarrantyClaim: React.FC = () => {
       phone: prev.phone || phone,
     }));
   }, [user]);
+
+  // Load shipping destinations and couriers when address location changes
+  useEffect(() => {
+    const loadShippingData = async () => {
+      if (!addressLocation?.locationId || !slug) return;
+
+      try {
+        setLoadingCouriers(true);
+        
+        // Get destinations (warranty service centers)
+        const destinationsResponse = await shippingService.getDestinations();
+        if (destinationsResponse.destinations.length > 0) {
+          const destination = destinationsResponse.destinations[0];
+          setDestinationAddress({
+            area_id: destination.area_id,
+            name: destination.name,
+            full_address: destination.address,
+            city: destination.city,
+            province: destination.province,
+            postal_code: destination.postal_code
+          });
+          
+          // Get couriers using the customer's address location as origin
+          const couriersResponse = await shippingService.getStorefrontCouriers(slug, {
+            from_city: addressLocation.city || '',
+            from_district: addressLocation.district || '',
+            to_city: destination.city,
+            to_district: destination.area_name, // Using area_name as district for destination
+            weight: 1000, // Default 1kg for warranty items
+            length: 30,   // Default dimensions
+            width: 20,
+            height: 10,
+            value: 100000, // Default value
+            cod: false,
+            insurance: true
+          });
+          
+          const formattedCouriers = shippingService.formatCouriersForDropdown(couriersResponse.couriers);
+          setAvailableCouriers(formattedCouriers);
+          
+          // Reset logistic service selection when couriers change
+          setLogisticService('');
+        }
+      } catch (error) {
+        console.error('Error loading shipping data:', error);
+        
+        // Provide specific error messages based on error type
+        if (error.message?.includes('Authentication required')) {
+          // This should not happen anymore with the fallback, but just in case
+          toast.warning('Using default warranty service center for shipping calculation');
+        } else if (error.message?.includes('Network')) {
+          toast.error('Network error. Please check your connection and try again.');
+        } else {
+          toast.error('Failed to load shipping options. Please try again.');
+        }
+        
+        setAvailableCouriers([]);
+      } finally {
+        setLoadingCouriers(false);
+      }
+    };
+
+    loadShippingData();
+  }, [addressLocation?.locationId, slug]);
 
   // Build complete address string
   const completeAddress = useMemo(() => {
@@ -175,24 +238,7 @@ const WarrantyClaim: React.FC = () => {
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0] || null;
-    // Validate file type and size (<= 5MB, JPG/PNG/PDF)
-    if (file) {
-      const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf'];
-      const isValidType = allowedTypes.includes(file.type);
-      const isValidSize = file.size <= 5 * 1024 * 1024; // 5MB
-      if (!isValidType) {
-        setError('Invalid file type. Only JPG, PNG, or PDF allowed.');
-        return;
-      }
-      if (!isValidSize) {
-        setError('File is too large. Maximum size is 5MB.');
-        return;
-      }
-    }
-    setClaimForm((prev) => ({ ...prev, invoiceFile: file }));
-  };
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -211,18 +257,6 @@ const WarrantyClaim: React.FC = () => {
 
     setIsSubmitting(true);
     try {
-      // Pre-upload attachment if provided
-      let invoiceAttachmentId: string | undefined = undefined;
-      if (claimForm.invoiceFile) {
-        const preUpload = await warrantyService.preUploadClaimAttachment(claimForm.invoiceFile);
-        if (preUpload.success && preUpload.data?.attachment?.id) {
-          invoiceAttachmentId = preUpload.data.attachment.id;
-        } else {
-          setError(preUpload.error || preUpload.message || 'Failed to upload invoice attachment');
-          setIsSubmitting(false);
-          return;
-        }
-      }
 
       // Use RAW barcode directly per backend acceptance; no validation/ID resolution required
       const payload: SubmitClaimRequest = {
@@ -248,7 +282,7 @@ const WarrantyClaim: React.FC = () => {
           postal_code: addressLocation?.postalCode || undefined,
           kelurahan: addressLocation?.kelurahan || (addressLocation?.locationType === 'area' ? addressLocation?.locationName || undefined : undefined),
         },
-        invoice_attachment_id: invoiceAttachmentId,
+
       };
 
       const res = await warrantyService.submitClaim(payload);
@@ -266,7 +300,7 @@ const WarrantyClaim: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background pb-20">
       <MobileNav activeTab="warranty" onTabChange={handleTabChange} />
       <Header />
 
@@ -383,6 +417,19 @@ const WarrantyClaim: React.FC = () => {
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Service Preferences*</h3>
 
+              {/* Destination Info */}
+              {destinationAddress && (
+                <div className="bg-muted/50 p-3 rounded-lg">
+                  <div className="flex items-center gap-2 mb-2">
+                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                    <span className="text-sm font-medium">Warranty Service Center</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {destinationAddress.full_address}
+                  </p>
+                </div>
+              )}
+
               <div>
                 <Label htmlFor="courier">Courier Type*</Label>
                 <Select value={courierType} onValueChange={setCourierType}>
@@ -397,17 +444,46 @@ const WarrantyClaim: React.FC = () => {
               </div>
 
               <div>
-                <Label htmlFor="logistic">Logistic Service*</Label>
-                <Select value={logisticService} onValueChange={setLogisticService}>
+                <Label htmlFor="logisticService">Shipping Service*</Label>
+                <Select 
+                  value={logisticService} 
+                  onValueChange={setLogisticService}
+                  disabled={loadingCouriers || availableCouriers.length === 0}
+                >
                   <SelectTrigger className="mt-2">
-                    <SelectValue placeholder="Select logistic service" />
+                    <SelectValue 
+                      placeholder={
+                        loadingCouriers 
+                          ? "Loading shipping options..." 
+                          : availableCouriers.length === 0 
+                            ? "No shipping options available"
+                            : "Select shipping service"
+                      } 
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {logisticServices.map((svc) => (
-                      <SelectItem key={svc.value} value={svc.value}>{svc.label}</SelectItem>
-                    ))}
+                    {loadingCouriers ? (
+                      <div className="flex items-center justify-center p-4">
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        <span className="text-sm">Loading...</span>
+                      </div>
+                    ) : (
+                      availableCouriers.map((courier) => (
+                        <SelectItem key={courier.value} value={courier.value}>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{courier.label}</span>
+                            <span className="text-xs text-muted-foreground">{courier.description}</span>
+                          </div>
+                        </SelectItem>
+                      ))
+                    )}
                   </SelectContent>
                 </Select>
+                {!addressLocation && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Please select your address first to see shipping options
+                  </p>
+                )}
               </div>
 
               <div>
@@ -417,37 +493,7 @@ const WarrantyClaim: React.FC = () => {
               </div>
             </div>
 
-            <Separator />
 
-            {/* Proof of Purchase */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Proof of Purchase</h3>
-              <div>
-                <Label htmlFor="invoice">Upload Invoice (PDF or Image)</Label>
-                <div className="flex items-center gap-2 mt-2">
-                  <Input
-                    id="invoice"
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => document.getElementById("invoice")?.click()}
-                    className="flex items-center gap-2"
-                  >
-                    <Upload className="h-4 w-4" />
-                    {claimForm.invoiceFile ? "Change File" : "Upload Invoice"}
-                  </Button>
-                  {claimForm.invoiceFile && (
-                    <span className="text-sm text-muted-foreground">{claimForm.invoiceFile.name}</span>
-                  )}
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">Accepted formats: JPG, PNG, PDF (Max 5MB)</p>
-              </div>
-            </div>
 
             <Button type="submit" className="w-full" disabled={!isFormValid || isSubmitting}>
               {isSubmitting ? (

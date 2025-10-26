@@ -1,0 +1,921 @@
+paths:
+  /api/v1/customer/shipping/locations/search:
+    get:
+      summary: Search shipping locations (Customer)
+      description: Search for shipping locations using query parameters. Customer-specific endpoint that requires customer authentication.
+      tags:
+        - Customer Shipping
+      security:
+        - customerAuth: []
+      parameters:
+        - name: query
+          in: query
+          required: true
+          description: Search query for location name
+          schema:
+            type: string
+            example: "Jakarta"
+        - name: type
+          in: query
+          required: false
+          description: Type of location to search for
+          schema:
+            type: string
+            enum: ["province", "city", "district", "area"]
+            example: "city"
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of results to return
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+            example: 10
+      responses:
+        '200':
+          description: Locations retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Locations retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      locations:
+                        type: array
+                        items:
+                          $ref: './schemas.yaml#/components/schemas/KirimkuLocation'
+                      total:
+                        type: integer
+                        example: 5
+        '400':
+          description: Bad request - Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Customer authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/customer/shipping/destinations:
+    get:
+      summary: Get available destinations (Customer)
+      description: |
+        Get the default warranty address as destination for customer shipping.
+        
+        **Authentication Required:** Customer must be logged in
+        
+        **Auto-populated Destination:**
+        - Returns the storefront's default warranty address
+        - This address will be used as the destination for all customer shipping requests
+        - Includes complete address details, contact information, and geographic coordinates
+        
+        **Use Case:**
+        - Customers can view where their warranty items will be shipped
+        - Frontend can display destination information before shipping calculation
+        - Provides transparency about warranty service locations
+      tags:
+        - Customer Shipping
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Destination retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Destination retrieved successfully"
+                  data:
+                    $ref: './schemas.yaml#/components/schemas/WarrantyAddress'
+        '401':
+          description: Customer authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: No default warranty address found
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/customer/shipping/couriers:
+    post:
+      summary: Get available couriers and rates
+      description: |
+        Get available courier services and shipping rates for a specific route.
+        
+        **Authentication Required:** Customer must be logged in
+        
+        **Input Format:**
+        - Uses simple city/district names for origin and destination
+        - Requires `from_city`, `from_district`, and `weight` as mandatory fields
+        - Optional fields include dimensions, value, COD, and insurance
+        
+        **Auto-populated Destination:**
+        - If `to_city`/`to_district` are not provided, falls back to storefront warranty destination
+        
+        **B2B Integration:**
+        - Uses Kirimku B2B API for accurate pricing and service availability
+      tags:
+        - Customer Shipping
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [from_city, from_district, weight]
+              properties:
+                from_city:
+                  type: string
+                  description: Origin city name
+                  example: "Jakarta Timur"
+                from_district:
+                  type: string
+                  description: Origin district name
+                  example: "Ciracas"
+                to_city:
+                  type: string
+                  description: Destination city name (optional)
+                  example: "Bandung"
+                to_district:
+                  type: string
+                  description: Destination district name (optional)
+                  example: "Bandung Kulon"
+                weight:
+                  type: integer
+                  description: Package weight in grams
+                  example: 1000
+                  minimum: 1
+                length:
+                  type: integer
+                  description: Package length in centimeters (optional)
+                  example: 20
+                width:
+                  type: integer
+                  description: Package width in centimeters (optional)
+                  example: 15
+                height:
+                  type: integer
+                  description: Package height in centimeters (optional)
+                  example: 10
+                value:
+                  type: integer
+                  format: int64
+                  description: Package value in IDR (optional)
+                  example: 500000
+                cod:
+                  type: boolean
+                  description: Cash on delivery (optional)
+                  example: false
+                insurance:
+                  type: boolean
+                  description: Package insurance (optional)
+                  example: true
+            examples:
+              simple_format:
+                value:
+                  from_city: "Jakarta Timur"
+                  from_district: "Ciracas"
+                  to_city: "Bandung"
+                  to_district: "Bandung Kulon"
+                  weight: 1000
+                  length: 20
+                  width: 15
+                  height: 10
+                  value: 500000
+                  cod: false
+                  insurance: true
+      responses:
+        '200':
+          description: Couriers retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Couriers retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      couriers:
+                        type: array
+                        items:
+                          $ref: './schemas.yaml#/components/schemas/KirimkuCourier'
+        '400':
+          description: Bad request - Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Customer authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/storefront/{storefront_slug}/shipping/couriers:
+    post:
+      summary: Get available couriers and rates (Storefront-specific)
+      description: |
+        Get available courier services and shipping rates for a specific route within a storefront context.
+        
+        **Authentication Required:** Customer must be logged in with customer JWT token
+        
+        **Storefront Context:**
+        - Uses the storefront's default warranty address as destination automatically
+        - Customers provide origin location and package details via JSON request body
+        - Destination is auto-populated from the storefront's warranty center address
+        
+        **Rate Calculation:**
+        - Returns available courier services with pricing
+        - Includes estimated delivery time for each service
+        - Supports various package sizes, weights, and special options (COD, insurance)
+        
+        **Use Case:**
+        - Customers can get shipping quotes for warranty returns
+        - Frontend can display available shipping options with pricing
+        - Supports real-time courier comparison
+      tags:
+        - Customer Shipping
+      security:
+        - customerAuth: []
+      parameters:
+        - name: storefront_slug
+          in: path
+          required: true
+          description: Storefront identifier slug
+          schema:
+            type: string
+            example: "rexus"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - origin_area_id
+                - destination_area_id
+                - weight
+                - length
+                - width
+                - height
+                - value
+                - cod
+                - insurance
+              properties:
+                origin_area_id:
+                  type: string
+                  description: Origin location area ID (use location search endpoint to get valid IDs)
+                  example: "JAKARTA_PUSAT"
+                destination_area_id:
+                  type: string
+                  description: Destination location area ID (use shipping destinations endpoint to get this)
+                  example: "SAWAH_BESAR"
+                weight:
+                  type: integer
+                  description: Package weight in grams
+                  minimum: 1
+                  example: 1000
+                length:
+                  type: integer
+                  description: Package length in centimeters
+                  minimum: 1
+                  example: 20
+                width:
+                  type: integer
+                  description: Package width in centimeters
+                  minimum: 1
+                  example: 15
+                height:
+                  type: integer
+                  description: Package height in centimeters
+                  minimum: 1
+                  example: 10
+                value:
+                  type: integer
+                  description: Package value in IDR (Indonesian Rupiah)
+                  minimum: 1
+                  example: 100000
+                cod:
+                  type: boolean
+                  description: Cash on Delivery option
+                  example: false
+                insurance:
+                  type: boolean
+                  description: Package insurance option
+                  example: false
+            example:
+              origin_area_id: "JAKARTA_PUSAT"
+              destination_area_id: "SAWAH_BESAR"
+              weight: 1000
+              length: 20
+              width: 15
+              height: 10
+              value: 100000
+              cod: false
+              insurance: false
+      responses:
+        '200':
+          description: Couriers retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Couriers retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      couriers:
+                        type: array
+                        items:
+                          type: object
+                          properties:
+                            courier_id:
+                              type: string
+                              description: Unique courier identifier
+                              example: "jne"
+                            courier_name:
+                              type: string
+                              description: Display name of the courier
+                              example: "JNE"
+                            services:
+                              type: array
+                              description: Available services for this courier
+                              items:
+                                type: object
+                                properties:
+                                  service_id:
+                                    type: string
+                                    description: Service type identifier
+                                    example: "reg"
+                                  service_name:
+                                    type: string
+                                    description: Display name of the service
+                                    example: "Regular"
+                                  price:
+                                    type: integer
+                                    description: Shipping price in IDR
+                                    example: 15000
+                                  estimated_delivery:
+                                    type: string
+                                    description: Estimated delivery time
+                                    example: "2-3 days"
+              examples:
+                success_response:
+                  summary: Successful courier retrieval
+                  value:
+                    success: true
+                    message: "Couriers retrieved successfully"
+                    data:
+                      couriers:
+                        - courier_id: "jne"
+                          courier_name: "JNE"
+                          services:
+                            - service_id: "reg"
+                              service_name: "Regular"
+                              price: 15000
+                              estimated_delivery: "2-3 days"
+                            - service_id: "yes"
+                              service_name: "YES"
+                              price: 25000
+                              estimated_delivery: "1-2 days"
+                        - courier_id: "jnt"
+                          courier_name: "J&T Express"
+                          services:
+                            - service_id: "reg"
+                              service_name: "Regular"
+                              price: 12000
+                              estimated_delivery: "2-4 days"
+        '400':
+          description: Bad request - Invalid or missing parameters
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+              examples:
+                missing_parameters:
+                  summary: Missing required parameters
+                  value:
+                    success: false
+                    message: "Missing required parameters"
+                    error: "validation_error"
+                    validation_errors:
+                      - "origin_area_id is required"
+                      - "weight must be greater than 0"
+                invalid_area_id:
+                  summary: Invalid area ID
+                  value:
+                    success: false
+                    message: "Invalid area ID provided"
+                    error: "invalid_area_id"
+        '401':
+          description: Customer authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+              examples:
+                unauthorized:
+                  summary: Authentication required
+                  value:
+                    success: false
+                    message: "Authentication required"
+                    error: "unauthorized"
+                    error_detail: "invalid authorization format"
+        '404':
+          description: Storefront not found or no default warranty address
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+              examples:
+                storefront_not_found:
+                  summary: Storefront not found
+                  value:
+                    success: false
+                    message: "Storefront not found"
+                    error: "storefront_not_found"
+                no_warranty_address:
+                  summary: No default warranty address
+                  value:
+                    success: false
+                    message: "No default warranty address found for storefront"
+                    error: "no_warranty_address"
+        '500':
+          description: Internal server error or external API unavailable
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+              examples:
+                kirimku_api_error:
+                  summary: Kirimku API unavailable
+                  value:
+                    success: false
+                    message: "Failed to get couriers from Kirimku API"
+                    error: "external_api_error"
+                    error_detail: "404 page not found"
+                internal_error:
+                  summary: Internal server error
+                  value:
+                    success: false
+                    message: "Internal server error"
+                    error: "internal_error"
+
+  /api/v1/customer/shipping/tariff:
+    post:
+      summary: Calculate shipping tariff (Customer)
+      description: Calculate shipping cost for a package between origin and destination. Customer-specific endpoint.
+      tags:
+        - Customer Shipping
+      security:
+        - customerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - origin
+                - destination
+                - weight
+                - courier_code
+              properties:
+                origin:
+                  type: string
+                  description: Origin location ID
+                  example: "JKT001"
+                destination:
+                  type: string
+                  description: Destination location ID
+                  example: "BDG001"
+                weight:
+                  type: integer
+                  description: Package weight in grams
+                  minimum: 1
+                  example: 1000
+                courier_code:
+                  type: string
+                  description: Courier service code
+                  example: "jne_reg"
+                length:
+                  type: integer
+                  description: Package length in cm
+                  minimum: 1
+                  example: 20
+                width:
+                  type: integer
+                  description: Package width in cm
+                  minimum: 1
+                  example: 15
+                height:
+                  type: integer
+                  description: Package height in cm
+                  minimum: 1
+                  example: 10
+      responses:
+        '200':
+          description: Tariff calculated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Tariff calculated successfully"
+                  data:
+                    type: object
+                    properties:
+                      tariff:
+                        $ref: './schemas.yaml#/components/schemas/KirimkuTariff'
+        '400':
+          description: Bad request - Invalid parameters
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Customer authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/customer/shipping/booking:
+    post:
+      summary: Create shipping booking (Customer)
+      description: |
+        Create a new shipping booking for customers.
+        
+        **Authentication Required:** Customer must be logged in
+        
+        **Auto-populated Fields:**
+        - The destination address is automatically populated from the customer's storefront warranty address
+        - Customers only need to provide origin address, package details, and courier selection
+        - Destination fields (name, phone, email, address, area_id, city_id, province_id, postal_code, latitude, longitude) are retrieved from the default warranty address
+        
+        **Booking Process:**
+        - Creates booking with selected courier and service
+        - Handles payment processing if required
+        - Returns booking confirmation with tracking details
+      tags:
+        - Customer Shipping
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              allOf:
+                - $ref: './schemas.yaml#/components/schemas/KirimkuBookingRequest'
+                - type: object
+                  description: "Note: destination field is optional and will be auto-populated from storefront's warranty address if not provided"
+      responses:
+        '201':
+          description: Booking created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Booking created successfully"
+                  data:
+                    type: object
+                    properties:
+                      booking:
+                        $ref: './schemas.yaml#/components/schemas/KirimkuBooking'
+        '400':
+          description: Bad request - Invalid booking data
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Customer authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/customer/shipping/booking/{id}:
+    get:
+      summary: Get shipping booking details (Customer)
+      description: Retrieve details of a specific shipping booking. Customer-specific endpoint.
+      tags:
+        - Customer Shipping
+      security:
+        - customerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Booking ID
+          schema:
+            type: string
+            example: "BK123456789"
+      responses:
+        '200':
+          description: Booking details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Booking details retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      booking:
+                        $ref: './schemas.yaml#/components/schemas/KirimkuBooking'
+        '401':
+          description: Customer authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+
+    put:
+      summary: Update shipping booking (Customer)
+      description: Update an existing shipping booking. Customer-specific endpoint.
+      tags:
+        - Customer Shipping
+      security:
+        - customerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Booking ID
+          schema:
+            type: string
+            example: "BK123456789"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './schemas.yaml#/components/schemas/KirimkuBookingUpdateRequest'
+      responses:
+        '200':
+          description: Booking updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Booking updated successfully"
+                  data:
+                    type: object
+                    properties:
+                      booking:
+                        $ref: './schemas.yaml#/components/schemas/KirimkuBooking'
+        '400':
+          description: Bad request - Invalid update data
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '401':
+          description: Customer authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+
+    delete:
+      summary: Cancel shipping booking (Customer)
+      description: Cancel an existing shipping booking. Customer-specific endpoint.
+      tags:
+        - Customer Shipping
+      security:
+        - customerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Booking ID
+          schema:
+            type: string
+            example: "BK123456789"
+      responses:
+        '200':
+          description: Booking cancelled successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Booking cancelled successfully"
+                  data:
+                    type: object
+                    properties:
+                      booking_id:
+                        type: string
+                        example: "BK123456789"
+                      status:
+                        type: string
+                        example: "cancelled"
+        '401':
+          description: Customer authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Booking not found
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '409':
+          description: Booking cannot be cancelled
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+
+  /api/v1/customer/shipping/transaction/{id}:
+    get:
+      summary: Get shipping transaction details (Customer)
+      description: Retrieve details of a specific shipping transaction. Customer-specific endpoint.
+      tags:
+        - Customer Shipping
+      security:
+        - customerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: Transaction ID
+          schema:
+            type: string
+            example: "TXN123456789"
+      responses:
+        '200':
+          description: Transaction details retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Transaction details retrieved successfully"
+                  data:
+                    type: object
+                    properties:
+                      transaction:
+                        $ref: './schemas.yaml#/components/schemas/KirimkuTransaction'
+        '401':
+          description: Customer authentication required
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '404':
+          description: Transaction not found
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: './schemas.yaml#/components/schemas/ErrorResponse'
+
+components:
+  securitySchemes:
+    customerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Customer JWT token for authentication

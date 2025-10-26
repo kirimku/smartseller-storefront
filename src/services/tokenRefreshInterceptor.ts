@@ -98,12 +98,12 @@ class TokenRefreshInterceptor {
     try {
       let response = await this.originalFetch(input, options);
 
-      // Handle 401 responses: attempt refresh only when Authorization header was present
+      // Handle 401 responses: attempt refresh when auth was present OR a refresh token exists
       if (response.status === 401 && !this.shouldSkipInterception(url)) {
         const hadAuthHeader = this.hasAuthorizationHeader(options);
-        
-        if (hadAuthHeader) {
-          console.log('🔄 Received 401 on authorized request, attempting token refresh');
+        const hasRefreshToken = await this.hasRefreshTokenAvailable();
+        if (hadAuthHeader || hasRefreshToken) {
+          console.log('🔄 401 detected, attempting token refresh');
           const refreshed = await this.handleTokenRefresh();
           if (refreshed) {
             // Update authorization header with new token and retry

@@ -370,45 +370,7 @@ export class WarrantyService {
     }
   }
 
-  /**
-   * Upload proof of purchase for warranty registration (invoice, receipt, etc.)
-   */
-  async uploadProofOfPurchase(
-    warrantyId: string,
-    file: File,
-    documentType: 'receipt' | 'invoice' | 'purchase_order' | 'warranty_card' = 'invoice'
-  ): Promise<WarrantyServiceResponse<import('@/types/warranty').ProofOfPurchaseInfo>> {
-    try {
-      const formData = new FormData();
-      // Backend expects 'proof_of_purchase' as the file field and a 'warranty_id'
-      formData.append('proof_of_purchase', file);
-      formData.append('warranty_id', warrantyId);
-      // Keep document_type for classification (optional server-side)
-      formData.append('document_type', documentType);
 
-      const url = this.buildWarrantyUrl(
-        'warranty/customer/warranties/upload-proof'
-      );
-
-      const response = await this.makeRequest<{ success: boolean; message: string; data: import('@/types/warranty').ProofOfPurchaseInfo }>(url, {
-        method: 'POST',
-        body: formData,
-      });
-
-      return {
-        success: true,
-        data: response.data,
-        message: response.message || 'Proof of purchase uploaded successfully'
-      };
-    } catch (error) {
-      console.error('❌ Failed to upload proof of purchase:', error);
-      return {
-        success: false,
-        error: error instanceof ApiError ? error.message : 'Failed to upload proof of purchase',
-        message: 'Failed to upload proof of purchase'
-      };
-    }
-  }
 
   // PROTECTED CUSTOMER ENDPOINTS (Authentication required)
 
@@ -692,6 +654,44 @@ export class WarrantyService {
         success: false,
         error: error instanceof ApiError ? error.message : 'Failed to upload attachment',
         message: 'Failed to upload attachment'
+      };
+    }
+  }
+
+  /**
+   * Upload proof of purchase document for warranty registration
+   */
+  async uploadProofOfPurchase(file: File, documentType: 'receipt' | 'invoice' | 'purchase_order' | 'warranty_card' = 'receipt'): Promise<WarrantyServiceResponse<{ document_url: string; document_type: string }>> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('document_type', documentType);
+
+      const url = this.buildWarrantyUrl('warranties/upload-proof');
+
+      const response = await this.makeRequest<{ 
+        success: boolean; 
+        message: string; 
+        data: { document_url: string; document_type: string; file_name: string; file_size: number } 
+      }>(url, {
+        method: 'POST',
+        body: formData,
+      });
+
+      return {
+        success: true,
+        data: {
+          document_url: response.data.document_url,
+          document_type: response.data.document_type
+        },
+        message: response.message || 'Proof of purchase uploaded successfully'
+      };
+    } catch (error) {
+      console.error('❌ Failed to upload proof of purchase:', error);
+      return {
+        success: false,
+        error: error instanceof ApiError ? error.message : 'Failed to upload proof of purchase',
+        message: 'Failed to upload proof of purchase'
       };
     }
   }

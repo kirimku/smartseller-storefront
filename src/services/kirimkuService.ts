@@ -1,5 +1,6 @@
 import { apiClient, handleApiError, type ApiResponse } from '@/lib/api';
 import { secureTokenStorage } from '@/services/secureTokenStorage';
+import { jwtTokenManager } from '@/services/jwtTokenManager';
 
 export type KirimkuLocationType = 'province' | 'city' | 'district' | 'area';
 
@@ -33,12 +34,12 @@ interface RawLocationItem {
 
 // Narrow type for nested shape with locations
 interface EnvelopeWithLocations {
-  data?: { locations?: RawLocationItem[] };
+  data?: { locations?: RawLocationItem[]; total?: number };
 }
 
 // Add nested envelope to handle shape: { data: { success, message, data: [] } }
 interface NestedEnvelope {
-  data?: { success?: boolean; message?: string; data?: RawLocationItem[]; locations?: RawLocationItem[] };
+  data?: { success?: boolean; message?: string; data?: RawLocationItem[]; locations?: RawLocationItem[]; total?: number };
 }
 
 class KirimkuService {
@@ -50,41 +51,60 @@ class KirimkuService {
     const { query, type, limit = 10 } = params;
 
     try {
+      // Ensure authenticated token for customer shipping endpoints
+      let token = secureTokenStorage.getAccessToken();
+
+      if (!token) {
+        await jwtTokenManager.refreshToken();
+        token = secureTokenStorage.getAccessToken();
+      } else if (secureTokenStorage.isTokenExpiringSoon()) {
+        await jwtTokenManager.validateAndRefreshIfNeeded();
+        token = secureTokenStorage.getAccessToken();
+      }
+
+      // Attach latest token (can be null; server will reject if unauthenticated)
+      await apiClient.setAuthToken(token);
+
       const searchParams = new URLSearchParams();
       searchParams.set('query', query);
       if (type) searchParams.set('type', type);
       if (limit) searchParams.set('limit', String(limit));
 
       const endpoint = `/api/v1/customer/shipping/locations/search?${searchParams.toString()}`;
-      // Flip to protected: do not mark as public so Authorization can be injected
-      const token = secureTokenStorage.getAccessToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : undefined;
-      const response: ApiResponse<{ data: LocationsSearchResponse } | LocationsSearchResponse | { data?: RawLocationItem[] } | RawLocationItem[] | EnvelopeWithLocations | NestedEnvelope> = await apiClient.get(endpoint, headers ? { headers } : undefined);
+      const response: ApiResponse<unknown> = await apiClient.get(endpoint, { requiresAuth: true });
 
       // Normalize varying server response shapes into KirimkuLocation[]
-      const raw = response.data as { data?: RawLocationItem[] } | RawLocationItem[] | LocationsSearchResponse | EnvelopeWithLocations | NestedEnvelope | undefined;
       let items: RawLocationItem[] = [];
+      let declaredTotal: number | undefined;
+
+      const raw = response.data as { data?: RawLocationItem[] } | RawLocationItem[] | LocationsSearchResponse | EnvelopeWithLocations | NestedEnvelope | undefined;
       if (raw) {
-        if (Array.isArray(raw)) {
+        // Preferred contract: { success: true, data: { locations: [], total } }
+        const env = raw as EnvelopeWithLocations;
+        if (env.data && Array.isArray(env.data.locations)) {
+          items = env.data.locations;
+          if (typeof env.data.total === 'number') {
+            declaredTotal = env.data.total;
+          }
+        } else if (Array.isArray(raw)) {
+          // Case: Raw array
           items = raw as RawLocationItem[];
-        } else if ('data' in raw && Array.isArray((raw as { data?: RawLocationItem[] }).data)) {
+        } else if ('data' in (raw as { data?: RawLocationItem[] }) && Array.isArray((raw as { data?: RawLocationItem[] }).data)) {
           // Case: { data: RawLocationItem[] }
           items = (raw as { data?: RawLocationItem[] }).data || [];
         } else if ('locations' in (raw as LocationsSearchResponse) && Array.isArray((raw as LocationsSearchResponse).locations)) {
           // Case: { locations: KirimkuLocation[] }
           items = (raw as LocationsSearchResponse).locations as unknown as RawLocationItem[];
+          declaredTotal = (raw as LocationsSearchResponse).total;
         } else {
-          // Case: { data: { locations?: RawLocationItem[] } }
-          const env = raw as EnvelopeWithLocations;
-          if (env.data && Array.isArray(env.data.locations)) {
-            items = env.data.locations;
-          } else {
-            // Case: { data: { success, message, data: RawLocationItem[] } }
-            const nested = raw as NestedEnvelope;
-            const nestedArray = nested.data?.data;
-            if (Array.isArray(nestedArray)) {
-              items = nestedArray;
-            }
+          // Case: { data: { success, message, data: RawLocationItem[] } }
+          const nested = raw as NestedEnvelope;
+          const nestedArray = nested.data?.data;
+          if (Array.isArray(nestedArray)) {
+            items = nestedArray;
+          }
+          if (typeof nested.data?.total === 'number') {
+            declaredTotal = nested.data?.total;
           }
         }
       }
@@ -128,11 +148,8 @@ class KirimkuService {
         }
       }
 
-      if (normalized.length > 0) {
-        return { locations: normalized, total: normalized.length };
-      }
-
-      return { locations: [], total: 0 };
+      const total = typeof declaredTotal === 'number' ? declaredTotal : normalized.length;
+      return { locations: normalized, total };
     } catch (error) {
       console.error('Failed to search kirimku locations:', error);
       throw handleApiError(error);
