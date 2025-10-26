@@ -1,0 +1,157 @@
+
+index-nuq-GvrU.js:576  GET https://rexus.api.smartseller.com/api/tenants/rexus/type net::ERR_NAME_NOT_RESOLVED
+interceptedFetch @ index-nuq-GvrU.js:576
+getTenantType @ index-nuq-GvrU.js:483
+resolveTenantContext @ index-nuq-GvrU.js:581
+initializeApis @ index-nuq-GvrU.js:581
+setAccessToken @ index-nuq-GvrU.js:581
+initializeTenantAwareClient @ index-nuq-GvrU.js:581
+W$ @ index-nuq-GvrU.js:581
+(anonymous) @ index-nuq-GvrU.js:581Understand this error
+index-nuq-GvrU.js:483 Failed to fetch tenant type for "rexus": TypeError: Failed to fetch
+    at Bi.interceptedFetch (index-nuq-GvrU.js:576:46127)
+    at ZP.getTenantType (index-nuq-GvrU.js:483:13637)
+    at $$.resolveTenantContext (index-nuq-GvrU.js:581:11991)
+    at $$.initializeApis (index-nuq-GvrU.js:581:11633)
+    at $$.setAccessToken (index-nuq-GvrU.js:581:12971)
+    at W$.initializeTenantAwareClient (index-nuq-GvrU.js:581:14940)
+    at new W$ (index-nuq-GvrU.js:581:14831)
+    at index-nuq-GvrU.js:581:18412
+overrideMethod @ hook.js:608
+getTenantType @ index-nuq-GvrU.js:483
+await in getTenantType
+resolveTenantContext @ index-nuq-GvrU.js:581
+initializeApis @ index-nuq-GvrU.js:581
+setAccessToken @ index-nuq-GvrU.js:581
+initializeTenantAwareClient @ index-nuq-GvrU.js:581
+W$ @ index-nuq-GvrU.js:581
+(anonymous) @ index-nuq-GvrU.js:581Understand this warning
+index-nuq-GvrU.js:576  GET https://rexus.api.smartseller.com/api/tenants/rexus/type net::ERR_NAME_NOT_RESOLVED
+interceptedFetch @ index-nuq-GvrU.js:576
+getTenantType @ index-nuq-GvrU.js:483
+(anonymous) @ index-nuq-GvrU.js:483
+(anonymous) @ index-nuq-GvrU.js:483
+N0 @ index-nuq-GvrU.js:40
+xl @ index-nuq-GvrU.js:40
+Xy @ index-nuq-GvrU.js:40
+ci @ index-nuq-GvrU.js:38
+Kj @ index-nuq-GvrU.js:40
+ji @ index-nuq-GvrU.js:40
+ob @ index-nuq-GvrU.js:40
+E @ index-nuq-GvrU.js:25
+j @ index-nuq-GvrU.js:25Understand this error
+index-nuq-GvrU.js:483 Failed to fetch tenant type for "rexus": TypeError: Failed to fetch
+    at Bi.interceptedFetch (index-nuq-GvrU.js:576:46127)
+    at ZP.getTenantType (index-nuq-GvrU.js:483:13637)
+    at index-nuq-GvrU.js:483:23889
+    at index-nuq-GvrU.js:483:24078
+    at N0 (index-nuq-GvrU.js:40:24283)
+    at xl (index-nuq-GvrU.js:40:42409)
+    at Xy (index-nuq-GvrU.js:40:36625)
+    at ci (index-nuq-GvrU.js:38:3279)
+    at Kj (index-nuq-GvrU.js:40:41286)
+    at ji (index-nuq-GvrU.js:40:40278)
+overrideMethod @ hook.js:608
+getTenantType @ index-nuq-GvrU.js:483
+await in getTenantType
+(anonymous) @ index-nuq-GvrU.js:483
+(anonymous) @ index-nuq-GvrU.js:483
+N0 @ index-nuq-GvrU.js:40
+xl @ index-nuq-GvrU.js:40
+Xy @ index-nuq-GvrU.js:40
+ci @ index-nuq-GvrU.js:38
+Kj @ index-nuq-GvrU.js:40
+ji @ index-nuq-GvrU.js:40
+ob @ index-nuq-GvrU.js:40
+E @ index-nuq-GvrU.js:25
+j @ index-nuq-GvrU.js:25Understand this warning
+index-nuq-GvrU.js:576  GET https://rexus.api.smartseller.com/api/tenants/rexus/type net::ERR_NAME_NOT_RESOLVED
+interceptedFetch @ index-nuq-GvrU.js:576
+getTenantType @ index-nuq-GvrU.js:483
+resolveTenantContext @ index-nuq-GvrU.js:581
+initializeApis @ index-nuq-GvrU.js:581
+$$ @ index-nuq-GvrU.js:581
+(anonymous) @ index-nuq-GvrU.js:581Understand this error
+index-nuq-GvrU.js:483 Failed to fetch tenant type for "rexus": TypeError: Failed to fetch
+    at Bi.interceptedFetch (index-nuq-GvrU.js:576:46127)
+    at ZP.getTenantType (index-nuq-GvrU.js:483:13637)
+    at $$.resolveTenantContext (index-nuq-GvrU.js:581:11991)
+    at $$.initializeApis (index-nuq-GvrU.js:581:11633)
+    at new $$ (index-nuq-GvrU.js:581:11574)
+    at index-nuq-GvrU.js:581:14564
+overrideMethod @ hook.js:608
+getTenantType @ index-nuq-GvrU.js:483
+await in getTenantType
+resolveTenantContext @ index-nuq-GvrU.js:581
+initializeApis @ index-nuq-GvrU.js:581
+$$ @ index-nuq-GvrU.js:581
+(anonymous) @ index-nuq-GvrU.js:581Understand this warning
+index-nuq-GvrU.js:576  GET https://rexus.api.smartseller.com/api/tenants/rexus net::ERR_NAME_NOT_RESOLVED
+interceptedFetch @ index-nuq-GvrU.js:576
+getTenantBySlug @ index-nuq-GvrU.js:483
+validateTenantSlug @ index-nuq-GvrU.js:483
+resolveTenantContext @ index-nuq-GvrU.js:581
+await in resolveTenantContext
+initializeApis @ index-nuq-GvrU.js:581
+$$ @ index-nuq-GvrU.js:581
+(anonymous) @ index-nuq-GvrU.js:581Understand this error
+index-nuq-GvrU.js:483 Failed to fetch tenant configuration for slug "rexus": TypeError: Failed to fetch
+    at Bi.interceptedFetch (index-nuq-GvrU.js:576:46127)
+    at ZP.getTenantBySlug (index-nuq-GvrU.js:483:12586)
+    at ZP.validateTenantSlug (index-nuq-GvrU.js:483:13079)
+    at $$.resolveTenantContext (index-nuq-GvrU.js:581:12043)
+    at async $$.initializeApis (index-nuq-GvrU.js:581:11622)
+overrideMethod @ hook.js:608
+getTenantBySlug @ index-nuq-GvrU.js:483
+await in getTenantBySlug
+validateTenantSlug @ index-nuq-GvrU.js:483
+resolveTenantContext @ index-nuq-GvrU.js:581
+await in resolveTenantContext
+initializeApis @ index-nuq-GvrU.js:581
+$$ @ index-nuq-GvrU.js:581
+(anonymous) @ index-nuq-GvrU.js:581Understand this error
+index-nuq-GvrU.js:576  GET https://rexus.api.smartseller.com/api/tenants/rexus net::ERR_NAME_NOT_RESOLVED
+interceptedFetch @ index-nuq-GvrU.js:576
+getTenantBySlug @ index-nuq-GvrU.js:483
+validateTenantSlug @ index-nuq-GvrU.js:483
+resolveTenantContext @ index-nuq-GvrU.js:581
+await in resolveTenantContext
+initializeApis @ index-nuq-GvrU.js:581
+setAccessToken @ index-nuq-GvrU.js:581
+initializeTenantAwareClient @ index-nuq-GvrU.js:581
+W$ @ index-nuq-GvrU.js:581
+(anonymous) @ index-nuq-GvrU.js:581Understand this error
+index-nuq-GvrU.js:483 Failed to fetch tenant configuration for slug "rexus": TypeError: Failed to fetch
+    at Bi.interceptedFetch (index-nuq-GvrU.js:576:46127)
+    at ZP.getTenantBySlug (index-nuq-GvrU.js:483:12586)
+    at ZP.validateTenantSlug (index-nuq-GvrU.js:483:13079)
+    at $$.resolveTenantContext (index-nuq-GvrU.js:581:12043)
+    at async $$.initializeApis (index-nuq-GvrU.js:581:11622)
+    at async $$.setAccessToken (index-nuq-GvrU.js:581:12960)
+    at async W$.initializeTenantAwareClient (index-nuq-GvrU.js:581:14931)
+overrideMethod @ hook.js:608
+getTenantBySlug @ index-nuq-GvrU.js:483
+await in getTenantBySlug
+validateTenantSlug @ index-nuq-GvrU.js:483
+resolveTenantContext @ index-nuq-GvrU.js:581
+await in resolveTenantContext
+initializeApis @ index-nuq-GvrU.js:581
+setAccessToken @ index-nuq-GvrU.js:581
+initializeTenantAwareClient @ index-nuq-GvrU.js:581
+W$ @ index-nuq-GvrU.js:581
+(anonymous) @ index-nuq-GvrU.js:581Understand this error
+index-nuq-GvrU.js:576  GET https://api.preproduction.kirimku.com/api/tenants/rexus 404 (Not Found)
+interceptedFetch @ index-nuq-GvrU.js:576
+w @ index-nuq-GvrU.js:483
+(anonymous) @ index-nuq-GvrU.js:483
+await in (anonymous)
+(anonymous) @ index-nuq-GvrU.js:483
+N0 @ index-nuq-GvrU.js:40
+xl @ index-nuq-GvrU.js:40
+Xy @ index-nuq-GvrU.js:40
+ci @ index-nuq-GvrU.js:38
+Kj @ index-nuq-GvrU.js:40
+ji @ index-nuq-GvrU.js:40
+ob @ index-nuq-GvrU.js:40
+E @ index-nuq-GvrU.js:25
+j @ index-nuq-GvrU.js:25Understand this error

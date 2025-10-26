@@ -128,16 +128,22 @@ class TokenRefreshInterceptor {
   }
 
   /**
-   * Add authorization header to request
+   * Add authorization header and storefront slug to request
    */
   private async addAuthorizationHeader(options: RequestInit, url?: string): Promise<void> {
     const accessToken = secureTokenStorage.getAccessToken();
     const existingHeaders = (options.headers as Record<string, string>) || {};
     const hasAuthHeader = 'Authorization' in existingHeaders || 'authorization' in existingHeaders;
 
+    // Always add X-Storefront-Slug header
+    const baseHeaders = {
+      ...existingHeaders,
+      'X-Storefront-Slug': 'rexus'
+    };
+
     // If the request already has Authorization, normalize and update it
     if (hasAuthHeader) {
-      const normalizedHeaders = { ...existingHeaders };
+      const normalizedHeaders = { ...baseHeaders };
       if ('authorization' in normalizedHeaders) {
         delete (normalizedHeaders as Record<string, string>)['authorization'];
       }
@@ -152,14 +158,14 @@ class TokenRefreshInterceptor {
     const isExcluded = url ? this.shouldSkipInterception(url) : false;
     if (accessToken && !isExcluded) {
       options.headers = {
-        ...existingHeaders,
+        ...baseHeaders,
         Authorization: `Bearer ${accessToken}`
       };
       return;
     }
 
-    // Leave headers unchanged for excluded endpoints
-    options.headers = existingHeaders;
+    // Leave headers with storefront slug for excluded endpoints
+    options.headers = baseHeaders;
   }
 
   /**
@@ -345,14 +351,20 @@ class AxiosStyleInterceptor {
    * Request interceptor
    */
   public async requestInterceptor(config: RequestInit & { url?: string }): Promise<RequestInit & { url?: string }> {
-    // Add authorization header
+    // Add authorization header and storefront slug
     const accessToken = secureTokenStorage.getAccessToken();
     const currentHeaders = (config.headers as Record<string, string>) || {};
     const hasAuthHeader = 'Authorization' in currentHeaders || 'authorization' in currentHeaders;
 
+    // Always add X-Storefront-Slug header
+    config.headers = {
+      ...currentHeaders,
+      'X-Storefront-Slug': 'rexus',
+    };
+
     if (accessToken && config.url && !this.isExcludedEndpoint(config.url) && !hasAuthHeader) {
       config.headers = {
-        ...currentHeaders,
+        ...config.headers,
         'Authorization': `Bearer ${accessToken}`
       };
     }

@@ -117,6 +117,7 @@ export class TenantAwareApiClient {
       baseOptions: {
         headers: {
           'Content-Type': 'application/json',
+          'X-Storefront-Slug': 'rexus',
           'X-Tenant-ID': context.tenantId || '',
           'X-Tenant-Type': context.tenantType,
           'X-Tenant-Slug': context.slug || '',

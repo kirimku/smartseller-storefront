@@ -137,6 +137,7 @@ export class SmartSellerApiClient {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'X-Storefront-Slug': 'rexus',
     };
 
     if (this.tenantId) {

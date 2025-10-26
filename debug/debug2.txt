@@ -1,0 +1,60 @@
+index-QuYHpCA7.js:576 
+ GET https://rexus.smartseller-api.preproduction.kirimku.com/api/tenants/rexus/type net::ERR_NAME_NOT_RESOLVED
+
+index-QuYHpCA7.js:483 Failed to fetch tenant type for "rexus": TypeError: Failed to fetch
+    at Bi.interceptedFetch (index-QuYHpCA7.js:576:46127)
+    at ZP.getTenantType (index-QuYHpCA7.js:483:13637)
+    at $$.resolveTenantContext (index-QuYHpCA7.js:581:11991)
+    at $$.initializeApis (index-QuYHpCA7.js:581:11633)
+    at $$.setAccessToken (index-QuYHpCA7.js:581:12971)
+    at W$.initializeTenantAwareClient (index-QuYHpCA7.js:581:14940)
+    at new W$ (index-QuYHpCA7.js:581:14831)
+    at index-QuYHpCA7.js:581:18412
+index-QuYHpCA7.js:576 
+ GET https://rexus.smartseller-api.preproduction.kirimku.com/api/tenants/rexus/type net::ERR_NAME_NOT_RESOLVED
+index-QuYHpCA7.js:483 Failed to fetch tenant type for "rexus": TypeError: Failed to fetch
+    at Bi.interceptedFetch (index-QuYHpCA7.js:576:46127)
+    at ZP.getTenantType (index-QuYHpCA7.js:483:13637)
+    at index-QuYHpCA7.js:483:23911
+    at index-QuYHpCA7.js:483:24100
+    at N0 (index-QuYHpCA7.js:40:24283)
+    at xl (index-QuYHpCA7.js:40:42409)
+    at Xy (index-QuYHpCA7.js:40:36625)
+    at ci (index-QuYHpCA7.js:38:3279)
+    at Kj (index-QuYHpCA7.js:40:41286)
+    at ji (index-QuYHpCA7.js:40:40278)
+index-QuYHpCA7.js:576 
+ GET https://rexus.smartseller-api.preproduction.kirimku.com/api/tenants/rexus/type net::ERR_NAME_NOT_RESOLVED
+index-QuYHpCA7.js:483 Failed to fetch tenant type for "rexus": TypeError: Failed to fetch
+    at Bi.interceptedFetch (index-QuYHpCA7.js:576:46127)
+    at ZP.getTenantType (index-QuYHpCA7.js:483:13637)
+    at $$.resolveTenantContext (index-QuYHpCA7.js:581:11991)
+    at $$.initializeApis (index-QuYHpCA7.js:581:11633)
+    at new $$ (index-QuYHpCA7.js:581:11574)
+    at index-QuYHpCA7.js:581:14564
+index-QuYHpCA7.js:576 
+ GET https://rexus.smartseller-api.preproduction.kirimku.com/api/tenants/rexus net::ERR_NAME_NOT_RESOLVED
+index-QuYHpCA7.js:483 Failed to fetch tenant configuration for slug "rexus": TypeError: Failed to fetch
+    at Bi.interceptedFetch (index-QuYHpCA7.js:576:46127)
+    at ZP.getTenantBySlug (index-QuYHpCA7.js:483:12586)
+    at ZP.validateTenantSlug (index-QuYHpCA7.js:483:13079)
+    at $$.resolveTenantContext (index-QuYHpCA7.js:581:12043)
+    at async $$.initializeApis (index-QuYHpCA7.js:581:11622)
+index-QuYHpCA7.js:576 
+ GET https://rexus.smartseller-api.preproduction.kirimku.com/api/tenants/rexus net::ERR_NAME_NOT_RESOLVED
+index-QuYHpCA7.js:483 Failed to fetch tenant configuration for slug "rexus": TypeError: Failed to fetch
+    at Bi.interceptedFetch (index-QuYHpCA7.js:576:46127)
+    at ZP.getTenantBySlug (index-QuYHpCA7.js:483:12586)
+    at ZP.validateTenantSlug (index-QuYHpCA7.js:483:13079)
+    at $$.resolveTenantContext (index-QuYHpCA7.js:581:12043)
+    at async $$.initializeApis (index-QuYHpCA7.js:581:11622)
+    at async $$.setAccessToken (index-QuYHpCA7.js:581:12960)
+    at async W$.initializeTenantAwareClient (index-QuYHpCA7.js:581:14931)
+VM72 registerSW.js:76 ✅ Service Worker registered successfully: https://smartseller-storefront.preproduction.kirimku.com/
+VM72 registerSW.js:98 🔄 Service Worker update found
+index-QuYHpCA7.js:576 
+ GET https://api.preproduction.kirimku.com/api/tenants/rexus 404 (Not Found)
+VM72 registerSW.js:117 🔄 Service Worker controller changed
+index-QuYHpCA7.js:581 [PWA Cache Manager] Service worker controller changed
+﻿
+

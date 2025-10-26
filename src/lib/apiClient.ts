@@ -21,6 +21,7 @@ const createApiConfiguration = (): Configuration => {
     baseOptions: {
       headers: {
         'Content-Type': 'application/json',
+        'X-Storefront-Slug': 'rexus',
       },
     },
   });
@@ -48,6 +49,7 @@ export class SmartSellerApiClient {
       baseOptions: {
         headers: {
           'Content-Type': 'application/json',
+          'X-Storefront-Slug': 'rexus',
           ...(this.accessToken && { 'Authorization': `Bearer ${this.accessToken}` }),
         },
       },

@@ -1,0 +1,73 @@
+ℹ️ Secure storage init: {hasCustomerEncrypted: false, hasRtEncrypted: false, hasAtEncrypted: false}
+index-DRsWtPGk.js:483 🔍 [TenantResolver] buildApiBaseUrl called with: {tenantId: 'rexus', isLocalhost: false, developmentMode: true}
+index-DRsWtPGk.js:483 🔍 [TenantResolver] Using localhost/dev mode, envBase: http://localhost:8090
+index-DRsWtPGk.js:483 🔍 [TenantResolver] VITE_API_BASE_URL from env: http://localhost:8090
+index-DRsWtPGk.js:483 🔍 [TenantResolver] buildApiBaseUrl called with: {tenantId: 'rexus', isLocalhost: false, developmentMode: true}
+index-DRsWtPGk.js:483 🔍 [TenantResolver] Using localhost/dev mode, envBase: http://localhost:8090
+index-DRsWtPGk.js:483 🔍 [TenantResolver] VITE_API_BASE_URL from env: http://localhost:8090
+index-DRsWtPGk.js:483 🔍 [TenantResolver] buildApiBaseUrl called with: {tenantId: 'rexus', isLocalhost: false, developmentMode: true}
+index-DRsWtPGk.js:483 🔍 [TenantResolver] Using localhost/dev mode, envBase: http://localhost:8090
+index-DRsWtPGk.js:483 🔍 [TenantResolver] VITE_API_BASE_URL from env: http://localhost:8090
+index-DRsWtPGk.js:483 🔍 [TenantResolver] buildApiBaseUrl called with: {tenantId: 'rexus', isLocalhost: false, developmentMode: true}
+index-DRsWtPGk.js:483 🔍 [TenantResolver] Using localhost/dev mode, envBase: http://localhost:8090
+index-DRsWtPGk.js:483 🔍 [TenantResolver] VITE_API_BASE_URL from env: http://localhost:8090
+index-DRsWtPGk.js:483 🔍 [TenantResolver] buildApiBaseUrl called with: {tenantId: 'rexus', isLocalhost: false, developmentMode: true}
+index-DRsWtPGk.js:483 🔍 [TenantResolver] Using localhost/dev mode, envBase: http://localhost:8090
+index-DRsWtPGk.js:483 🔍 [TenantResolver] VITE_API_BASE_URL from env: http://localhost:8090
+index-DRsWtPGk.js:581 🔍 ===== ENVIRONMENT VARIABLES DEBUG =====
+index-DRsWtPGk.js:581 📍 Current URL: https://smartseller-storefront.preproduction.kirimku.com/
+index-DRsWtPGk.js:581 🌐 Current hostname: smartseller-storefront.preproduction.kirimku.com
+index-DRsWtPGk.js:581 🔧 Node Environment: development
+index-DRsWtPGk.js:581 🔧 All VITE Environment Variables:
+index-DRsWtPGk.js:581    VITE_API_BASE_URL: http://localhost:8090
+index-DRsWtPGk.js:581    VITE_TENANT_SLUG: rexus
+index-DRsWtPGk.js:581 🌐 API Configuration:
+index-DRsWtPGk.js:581    VITE_API_BASE_URL: http://localhost:8090
+index-DRsWtPGk.js:581    VITE_API_URL: undefined
+index-DRsWtPGk.js:581    VITE_TENANT_SLUG: rexus
+index-DRsWtPGk.js:581    DEV: false
+index-DRsWtPGk.js:581 🔧 All Available Environment Variables:
+index-DRsWtPGk.js:581 {BASE_URL: '/', DEV: false, MODE: 'development', PROD: true, SSR: false, …}
+index-DRsWtPGk.js:581 🔍 ===== END ENVIRONMENT DEBUG =====
+index-DRsWtPGk.js:581 [PWA Cache Manager] Initializing PWA Cache Manager...
+index-DRsWtPGk.js:581 🛡️ TokenRefreshInterceptor active: {isRefreshing: false, queueLength: 0, isActive: false}
+index-DRsWtPGk.js:483 🔍 [TenantResolver] getTenantApiUrl called with tenantId: rexus
+index-DRsWtPGk.js:483 🔍 [TenantResolver] Returning hardcoded URL: https://smartseller-api.preproduction.kirimku.com
+index-DRsWtPGk.js:483 🔍 [TenantResolver] getTenantApiUrl called with tenantId: rexus
+index-DRsWtPGk.js:483 🔍 [TenantResolver] Returning hardcoded URL: https://smartseller-api.preproduction.kirimku.com
+VM2553 registerSW.js:66 🔧 Registering Service Worker...
+index-DRsWtPGk.js:581 [PWA Cache Manager] Existing service worker registration found
+index-DRsWtPGk.js:581 [PWA Cache Manager] Started update checks every 300000ms
+index-DRsWtPGk.js:581 [PWA Cache Manager] PWA Cache Manager initialized successfully
+index-DRsWtPGk.js:581 ✅ PWA Cache Manager initialized successfully
+index-DRsWtPGk.js:483 PWA Install Prompt - App installed: false
+index-DRsWtPGk.js:483 🔍 [TenantResolver] buildApiBaseUrl called with: {tenantId: 'rexus', isLocalhost: false, developmentMode: true}
+index-DRsWtPGk.js:483 🔍 [TenantResolver] Using localhost/dev mode, envBase: http://localhost:8090
+index-DRsWtPGk.js:483 🔍 [TenantResolver] VITE_API_BASE_URL from env: http://localhost:8090
+VM2553 registerSW.js:76 ✅ Service Worker registered successfully: https://smartseller-storefront.preproduction.kirimku.com/
+index-DRsWtPGk.js:496 🔍 Getting access token: {hasToken: false, tokenLength: undefined, tokenStart: undefined, isExpired: true, expiresAt: null}
+index-DRsWtPGk.js:496 🔍 Refresh token storage status: {hasRt: false}
+index-DRsWtPGk.js:496 ℹ️ No stored authentication found
+index-DRsWtPGk.js:496 🔍 Getting access token: {hasToken: false, tokenLength: undefined, tokenStart: undefined, isExpired: true, expiresAt: null}
+index-DRsWtPGk.js:576  GET https://api.preproduction.kirimku.com/api/tenants/rexus 404 (Not Found)
+interceptedFetch @ index-DRsWtPGk.js:576
+w @ index-DRsWtPGk.js:483
+(anonymous) @ index-DRsWtPGk.js:483
+await in (anonymous)
+(anonymous) @ index-DRsWtPGk.js:483
+N0 @ index-DRsWtPGk.js:40
+xl @ index-DRsWtPGk.js:40
+qy @ index-DRsWtPGk.js:40
+ci @ index-DRsWtPGk.js:38
+Yj @ index-DRsWtPGk.js:40
+ji @ index-DRsWtPGk.js:40
+lb @ index-DRsWtPGk.js:40
+E @ index-DRsWtPGk.js:25
+j @ index-DRsWtPGk.js:25Understand this error
+index-DRsWtPGk.js:581 [PWA Cache Manager] Service worker update found
+VM2553 registerSW.js:98 🔄 Service Worker update found
+index-DRsWtPGk.js:581 [PWA Cache Manager] New service worker installed
+VM2553 registerSW.js:104 🆕 New Service Worker installed, update available
+index-DRsWtPGk.js:581 [PWA Cache Manager] Service worker update available
+VM2553 registerSW.js:117 🔄 Service Worker controller changed
+index-DRsWtPGk.js:581 [PWA Cache Manager] Service worker controller changed
