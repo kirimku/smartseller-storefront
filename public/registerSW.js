@@ -181,9 +181,9 @@ async function unregisterServiceWorker() {
   }
 
   try {
-    const registration = await navigator.serviceWorker.getRegistration();
-    if (registration) {
-      const result = await registration.unregister();
+    const currentRegistration = await navigator.serviceWorker.getRegistration();
+    if (currentRegistration) {
+      const result = await currentRegistration.unregister();
       console.log('🗑️ Service Worker unregistered:', result);
       stopUpdateChecks();
       return result;

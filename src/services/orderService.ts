@@ -5,6 +5,7 @@
 import { apiClient, ApiResponse, handleApiError } from '@/lib/api';
 import { Product } from './productService';
 import { CustomerAddress } from './customerService';
+import { tenantResolver } from '@/services/tenantResolver';
 
 // Order Types
 export interface Order {
@@ -151,12 +152,27 @@ export interface OrderSummary {
 
 export class OrderService {
   /**
+   * Get storefront slug for API headers
+   */
+  private getStorefrontSlug(): string {
+    try {
+      return tenantResolver.resolveTenant().slug || 'rexus';
+    } catch (error) {
+      console.warn('Failed to resolve tenant, using default storefront slug');
+      return 'rexus'; // Default fallback for development
+    }
+  }
+
+  /**
    * Create a new order
    */
   async createOrder(orderData: CreateOrderRequest): Promise<Order> {
     try {
       const response = await apiClient.post<Order>('/api/orders', orderData, {
         requiresAuth: true,
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
       });
       
       if (response.success && response.data) {
@@ -187,6 +203,9 @@ export class OrderService {
       const endpoint = `/api/orders?${queryParams.toString()}`;
       const response = await apiClient.get<OrderListResponse>(endpoint, {
         requiresAuth: true,
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
       });
       
       if (response.success && response.data) {
@@ -207,6 +226,9 @@ export class OrderService {
     try {
       const response = await apiClient.get<Order>(`/api/orders/${orderId}`, {
         requiresAuth: true,
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
       });
       
       if (response.success && response.data) {
@@ -227,6 +249,9 @@ export class OrderService {
     try {
       const response = await apiClient.get<Order>(`/api/orders/number/${orderNumber}`, {
         requiresAuth: true,
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
       });
       
       if (response.success && response.data) {
@@ -245,10 +270,14 @@ export class OrderService {
    */
   async cancelOrder(orderId: string, reason?: string): Promise<Order> {
     try {
-      const response = await apiClient.post<Order>(
-        `/api/orders/${orderId}/cancel`,
-        { reason },
-        { requiresAuth: true }
+      const response = await apiClient.put<Order>(`/api/orders/${orderId}/cancel`, 
+        { reason }, 
+        {
+          requiresAuth: true,
+          headers: {
+            'X-Storefront-Slug': this.getStorefrontSlug()
+          }
+        }
       );
       
       if (response.success && response.data) {
@@ -267,11 +296,15 @@ export class OrderService {
    */
   async requestRefund(orderId: string, items: string[], reason: string): Promise<void> {
     try {
-      const response = await apiClient.post(
-        `/api/orders/${orderId}/refund`,
-        { items, reason },
-        { requiresAuth: true }
-      );
+      const response = await apiClient.post<void>(`/api/orders/${orderId}/refund`, {
+        items,
+        reason
+      }, {
+        requiresAuth: true,
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
+      });
       
       if (!response.success) {
         throw new Error(response.error || 'Failed to request refund');
@@ -289,6 +322,9 @@ export class OrderService {
     try {
       const response = await apiClient.get<TrackingInfo>(`/api/orders/${orderId}/tracking`, {
         requiresAuth: true,
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
       });
       
       if (response.success && response.data) {
@@ -307,7 +343,11 @@ export class OrderService {
    */
   async getShippingMethods(address: Partial<CustomerAddress>): Promise<ShippingMethod[]> {
     try {
-      const response = await apiClient.post<ShippingMethod[]>('/api/shipping/methods', address);
+      const response = await apiClient.post<ShippingMethod[]>('/api/shipping/methods', address, {
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
+      });
       
       if (response.success && response.data) {
         return response.data;
@@ -335,6 +375,10 @@ export class OrderService {
         shippingMethodId,
         couponCode,
         shippingAddress,
+      }, {
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
       });
       
       if (response.success && response.data) {
@@ -364,8 +408,12 @@ export class OrderService {
         discountType: 'percentage' | 'fixed';
         message?: string;
       }>('/api/coupons/validate', {
-        code: couponCode,
-        items,
+        couponCode,
+        items
+      }, {
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
       });
       
       if (response.success && response.data) {
@@ -402,6 +450,9 @@ export class OrderService {
         unavailableItems: OrderItem[];
       }>(`/api/orders/${orderId}/reorder`, {}, {
         requiresAuth: true,
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
       });
       
       if (response.success && response.data) {
@@ -432,6 +483,9 @@ export class OrderService {
         statusBreakdown: Record<OrderStatus, number>;
       }>('/api/orders/stats', {
         requiresAuth: true,
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
       });
       
       if (response.success && response.data) {

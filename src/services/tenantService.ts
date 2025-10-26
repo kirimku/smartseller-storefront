@@ -37,6 +37,18 @@ export interface TenantResolutionResponse {
 
 export class TenantService {
   /**
+   * Get storefront slug for API headers
+   */
+  private getStorefrontSlug(): string {
+    try {
+      return tenantResolver.resolveTenant().slug || 'rexus';
+    } catch (error) {
+      console.warn('Failed to resolve tenant, using default storefront slug');
+      return 'rexus'; // Default fallback for development
+    }
+  }
+
+  /**
    * Resolve tenant using multiple detection methods (slug, subdomain, path)
    */
   async resolveTenant(request: TenantResolutionRequest): Promise<TenantResolutionResponse> {
@@ -52,7 +64,7 @@ export class TenantService {
       const resolution = tenantResolver.resolveTenant();
       
       // Perform slug detection
-      const slugDetection = await slugDetectionService.detectSlug(identifier);
+      const slugDetection = slugDetectionService.detectSlug();
 
       // Get tenant configuration
       let tenant: TenantConfig | null = null;
@@ -93,7 +105,11 @@ export class TenantService {
       const fullUrl = `${apiUrl}/api/tenants/${slug}`;
       console.log('🔍 [TenantService] Making API call to:', fullUrl);
       
-      const response = await apiClient.get<TenantApiResponse>(fullUrl);
+      const response = await apiClient.get<TenantApiResponse>(fullUrl, {
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
+      });
       console.log('🔍 [TenantService] API response:', response);
       
       if (response.success && response.data?.success && response.data.data) {
@@ -144,7 +160,11 @@ export class TenantService {
    */
   async getTenantBySubdomain(subdomain: string): Promise<TenantConfig | null> {
     try {
-      const response = await apiClient.get<TenantApiResponse>(`/api/tenants/${subdomain}`);
+      const response = await apiClient.get<TenantApiResponse>(`/api/tenants/${subdomain}`, {
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
+      });
       
       if (response.success && response.data?.success && response.data.data) {
         return response.data.data;
@@ -162,7 +182,11 @@ export class TenantService {
    */
   async validateTenant(subdomain: string): Promise<TenantValidationResponse> {
     try {
-      const response = await apiClient.get<TenantValidationResponse>(`/api/tenants/${subdomain}/validate`);
+      const response = await apiClient.get<TenantValidationResponse>(`/api/tenants/${subdomain}/validate`, {
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
+      });
       
       if (response.success && response.data) {
         return response.data;
@@ -189,7 +213,12 @@ export class TenantService {
       const response = await apiClient.put<TenantApiResponse>(
         `/api/tenants/${tenantId}`,
         updates,
-        { requiresAuth: true }
+        { 
+          requiresAuth: true,
+          headers: {
+            'X-Storefront-Slug': this.getStorefrontSlug()
+          }
+        }
       );
       
       if (response.success && response.data?.success && response.data.data) {
@@ -210,7 +239,12 @@ export class TenantService {
     try {
       const response = await apiClient.get(
         `/api/tenants/${tenantId}/analytics?period=${period}`,
-        { requiresAuth: true }
+        { 
+          requiresAuth: true,
+          headers: {
+            'X-Storefront-Slug': this.getStorefrontSlug()
+          }
+        }
       );
       
       if (response.success && response.data) {
@@ -231,7 +265,12 @@ export class TenantService {
     try {
       const response = await apiClient.get(
         `/api/tenants/${tenantId}/features/usage`,
-        { requiresAuth: true }
+        { 
+          requiresAuth: true,
+          headers: {
+            'X-Storefront-Slug': this.getStorefrontSlug()
+          }
+        }
       );
       
       if (response.success && response.data) {
@@ -253,7 +292,12 @@ export class TenantService {
       const response = await apiClient.patch<TenantApiResponse>(
         `/api/tenants/${tenantId}/features`,
         { features },
-        { requiresAuth: true }
+        { 
+          requiresAuth: true,
+          headers: {
+            'X-Storefront-Slug': this.getStorefrontSlug()
+          }
+        }
       );
       
       if (response.success && response.data?.success && response.data.data) {

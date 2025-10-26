@@ -3,6 +3,7 @@
  */
 
 import { apiClient, ApiResponse, handleApiError } from '@/lib/api';
+import { tenantResolver } from '@/services/tenantResolver';
 
 // Product Types
 export interface Product {
@@ -105,6 +106,25 @@ export interface ProductListResponse {
 
 export class ProductService {
   /**
+   * Get the current storefront slug
+   */
+  private getStorefrontSlug(): string {
+    try {
+      const resolution = tenantResolver.resolveTenant();
+      const slug = resolution.slug || resolution.tenantId || (import.meta.env.DEV ? 'rexus' : null);
+      if (!slug) {
+        throw new Error('Storefront slug not resolved');
+      }
+      return slug;
+    } catch (error) {
+      if (import.meta.env.DEV) {
+        return 'rexus';
+      }
+      throw error instanceof Error ? error : new Error('Failed to resolve storefront slug');
+    }
+  }
+
+  /**
    * Get paginated list of products
    */
   async getProducts(params: ProductListParams = {}): Promise<ProductListResponse> {
@@ -134,7 +154,12 @@ export class ProductService {
       }
       
       const response = await apiClient.get<ProductListResponse>(
-        `/api/products?${queryParams.toString()}`
+        `/api/products?${queryParams.toString()}`,
+        {
+          headers: {
+            'X-Storefront-Slug': this.getStorefrontSlug()
+          }
+        }
       );
       
       if (response.success && response.data) {
@@ -153,7 +178,11 @@ export class ProductService {
    */
   async getProduct(productId: string): Promise<Product> {
     try {
-      const response = await apiClient.get<Product>(`/api/products/${productId}`);
+      const response = await apiClient.get<Product>(`/api/products/${productId}`, {
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
+      });
       
       if (response.success && response.data) {
         return response.data;
@@ -171,7 +200,11 @@ export class ProductService {
    */
   async getProductBySlug(slug: string): Promise<Product> {
     try {
-      const response = await apiClient.get<Product>(`/api/products/slug/${slug}`);
+      const response = await apiClient.get<Product>(`/api/products/slug/${slug}`, {
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
+      });
       
       if (response.success && response.data) {
         return response.data;
@@ -227,7 +260,12 @@ export class ProductService {
   async getRelatedProducts(productId: string, limit: number = 4): Promise<Product[]> {
     try {
       const response = await apiClient.get<Product[]>(
-        `/api/products/${productId}/related?limit=${limit}`
+        `/api/products/${productId}/related?limit=${limit}`,
+        {
+          headers: {
+            'X-Storefront-Slug': this.getStorefrontSlug()
+          }
+        }
       );
       
       if (response.success && response.data) {
@@ -246,7 +284,11 @@ export class ProductService {
    */
   async getCategories(): Promise<ProductCategory[]> {
     try {
-      const response = await apiClient.get<ProductCategory[]>('/api/categories');
+      const response = await apiClient.get<ProductCategory[]>('/api/categories', {
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
+      });
       
       if (response.success && response.data) {
         return response.data;
@@ -276,7 +318,11 @@ export class ProductService {
         available: boolean;
         quantity: number;
         estimatedDelivery?: string;
-      }>(endpoint);
+      }>(endpoint, {
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
+      });
       
       if (response.success && response.data) {
         return response.data;

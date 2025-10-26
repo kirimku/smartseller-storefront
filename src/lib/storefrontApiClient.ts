@@ -177,6 +177,7 @@ export class StorefrontApiClient {
    */
   private async makeRequest<T>(
     url: string,
+    storefrontSlug: string,
     options: RequestInit = {}
   ): Promise<T> {
     // Build headers, only set Content-Type when we have a request body
@@ -184,6 +185,7 @@ export class StorefrontApiClient {
     const hasBody = options.body !== undefined && options.body !== null;
     const headers: Record<string, string> = {
       ...providedHeaders,
+      'X-Storefront-Slug': storefrontSlug,
       ...(hasBody ? { 'Content-Type': providedHeaders['Content-Type'] || 'application/json' } : {}),
     };
 
@@ -261,7 +263,7 @@ export class StorefrontApiClient {
     const url = this.buildStorefrontUrl(storefrontSlug, 'register');
     
     // Get the actual API response structure
-    const apiResponse = await this.makeRequest<ApiResponse<CustomerRegistrationApiResponse>>(url, {
+    const apiResponse = await this.makeRequest<ApiResponse<CustomerRegistrationApiResponse>>(url, storefrontSlug, {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -301,7 +303,7 @@ export class StorefrontApiClient {
     const url = this.buildStorefrontUrl(storefrontSlug, 'login');
     
     // Get the actual API response structure
-    const apiResponse = await this.makeRequest<ApiResponse<CustomerLoginApiResponse>>(url, {
+    const apiResponse = await this.makeRequest<ApiResponse<CustomerLoginApiResponse>>(url, storefrontSlug, {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
@@ -345,7 +347,7 @@ export class StorefrontApiClient {
       // non-blocking debug
     }
 
-    return this.makeRequest<TokenRefreshResponse>(url, {
+    return this.makeRequest<TokenRefreshResponse>(url, storefrontSlug, {
       method: 'POST',
       headers: {
         // Keep Authorization for backward compatibility with header-based servers
@@ -363,7 +365,7 @@ export class StorefrontApiClient {
   async logoutCustomer(storefrontSlug: string): Promise<void> {
     const url = this.buildStorefrontUrl(storefrontSlug, 'logout');
     
-    await this.makeRequest<void>(url, {
+    await this.makeRequest<void>(url, storefrontSlug, {
       method: 'POST',
     });
   }
@@ -377,7 +379,7 @@ export class StorefrontApiClient {
   ): Promise<{ message: string }> {
     const url = this.buildStorefrontUrl(storefrontSlug, 'verify-email');
     
-    return this.makeRequest<{ message: string }>(url, {
+    return this.makeRequest<{ message: string }>(url, storefrontSlug, {
       method: 'POST',
       body: JSON.stringify({ token }),
     });
@@ -392,7 +394,7 @@ export class StorefrontApiClient {
   ): Promise<{ message: string }> {
     const url = this.buildStorefrontUrl(storefrontSlug, 'resend-verification');
     
-    return this.makeRequest<{ message: string }>(url, {
+    return this.makeRequest<{ message: string }>(url, storefrontSlug, {
       method: 'POST',
       body: JSON.stringify({ email }),
     });
@@ -407,7 +409,7 @@ export class StorefrontApiClient {
   ): Promise<{ message: string }> {
     const url = this.buildStorefrontUrl(storefrontSlug, 'forgot-password');
     
-    return this.makeRequest<{ message: string }>(url, {
+    return this.makeRequest<{ message: string }>(url, storefrontSlug, {
       method: 'POST',
       body: JSON.stringify({ email }),
     });
@@ -423,7 +425,7 @@ export class StorefrontApiClient {
   ): Promise<{ message: string }> {
     const url = this.buildStorefrontUrl(storefrontSlug, 'reset-password');
     
-    return this.makeRequest<{ message: string }>(url, {
+    return this.makeRequest<{ message: string }>(url, storefrontSlug, {
       method: 'POST',
       body: JSON.stringify({ token, new_password: newPassword }),
     });
@@ -432,7 +434,7 @@ export class StorefrontApiClient {
   // Fetch authenticated customer profile
   async getProfile(storefrontSlug: string): Promise<Customer> {
     const url = this.buildProfileUrl(storefrontSlug);
-    const apiResponse = await this.makeRequest<ApiResponse<Customer>>(url, {
+    const apiResponse = await this.makeRequest<ApiResponse<Customer>>(url, storefrontSlug, {
       method: 'GET',
     });
     return apiResponse.data;

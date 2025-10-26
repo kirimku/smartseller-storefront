@@ -4,6 +4,7 @@
 
 import { apiClient, handleApiError, type ApiResponse } from '@/lib/api';
 import { useTenant } from '@/contexts/TenantContext';
+import { tenantResolver } from '@/services/tenantResolver';
 
 // Location Types
 export interface ShippingLocation {
@@ -80,6 +81,18 @@ export interface CourierResponse {
 
 export class ShippingService {
   /**
+   * Get storefront slug for API headers
+   */
+  private getStorefrontSlug(): string {
+    try {
+      return tenantResolver.resolveTenant().slug || 'rexus';
+    } catch (error) {
+      console.warn('Failed to resolve tenant, using default storefront slug');
+      return 'rexus'; // Default fallback for development
+    }
+  }
+
+  /**
    * Search for shipping locations (provinces, cities, districts, areas)
    */
   async searchLocations(
@@ -99,7 +112,12 @@ export class ShippingService {
 
       const response = await apiClient.get<LocationSearchResponse>(
         `/api/v1/customer/shipping/locations/search?${params.toString()}`,
-        { requiresAuth: true }
+        { 
+          requiresAuth: true,
+          headers: {
+            'X-Storefront-Slug': this.getStorefrontSlug()
+          }
+        }
       );
 
       if (response.success && response.data) {
@@ -149,7 +167,12 @@ export class ShippingService {
       // The API returns a single WarrantyAddress object under `data`
       const response = await apiClient.get<WarrantyAddressPayload | WarrantyDestinationsPayload>(
         '/api/v1/customer/shipping/destinations',
-        { requiresAuth: true }
+        { 
+          requiresAuth: true,
+          headers: {
+            'X-Storefront-Slug': this.getStorefrontSlug()
+          }
+        }
       );
 
       // Normalize into our DestinationsResponse shape
@@ -262,7 +285,12 @@ export class ShippingService {
       const response = await apiClient.post<unknown>(
         '/api/v1/customer/shipping/couriers',
         payload,
-        { requiresAuth: true }
+        { 
+          requiresAuth: true,
+          headers: {
+            'X-Storefront-Slug': this.getStorefrontSlug()
+          }
+        }
       );
 
       if (response.success && response.data !== undefined) {
@@ -302,7 +330,12 @@ export class ShippingService {
       const response = await apiClient.post<unknown>(
         `/api/v1/storefront/${storefrontSlug}/shipping/couriers`,
         payload,
-        { requiresAuth: true }
+        { 
+          requiresAuth: true,
+          headers: {
+            'X-Storefront-Slug': this.getStorefrontSlug()
+          }
+        }
       );
 
       if (response.success && response.data !== undefined) {

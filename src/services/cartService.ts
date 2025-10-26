@@ -4,6 +4,7 @@
 
 import { apiClient, ApiResponse, handleApiError } from '@/lib/api';
 import { Product } from './productService';
+import { tenantResolver } from '@/services/tenantResolver';
 
 // Cart Types
 export interface CartItem {
@@ -70,6 +71,18 @@ export class CartService {
    */
   private initializeCart(): void {
     this.cartId = localStorage.getItem('cart_id');
+  }
+
+  /**
+   * Get storefront slug for API headers
+   */
+  private getStorefrontSlug(): string {
+    try {
+      return tenantResolver.resolveTenant().slug || 'rexus';
+    } catch (error) {
+      console.warn('Failed to resolve tenant, using default storefront slug');
+      return 'rexus'; // Default fallback for development
+    }
   }
 
   /**

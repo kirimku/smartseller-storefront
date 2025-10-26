@@ -1,6 +1,7 @@
 import { apiClient, handleApiError, type ApiResponse } from '@/lib/api';
 import { secureTokenStorage } from '@/services/secureTokenStorage';
 import { jwtTokenManager } from '@/services/jwtTokenManager';
+import { tenantResolver } from './tenantResolver';
 
 export type KirimkuLocationType = 'province' | 'city' | 'district' | 'area';
 
@@ -43,6 +44,15 @@ interface NestedEnvelope {
 }
 
 class KirimkuService {
+  private getStorefrontSlug(): string {
+    try {
+      const resolution = tenantResolver.resolveTenant();
+      return resolution.slug || 'rexus';
+    } catch (error) {
+      return 'rexus';
+    }
+  }
+
   async searchLocations(params: {
     query: string;
     type?: KirimkuLocationType;
@@ -71,7 +81,12 @@ class KirimkuService {
       if (limit) searchParams.set('limit', String(limit));
 
       const endpoint = `/api/v1/customer/shipping/locations/search?${searchParams.toString()}`;
-      const response: ApiResponse<unknown> = await apiClient.get(endpoint, { requiresAuth: true });
+      const response: ApiResponse<unknown> = await apiClient.get(endpoint, { 
+        requiresAuth: true,
+        headers: {
+          'X-Storefront-Slug': this.getStorefrontSlug()
+        }
+      });
 
       // Normalize varying server response shapes into KirimkuLocation[]
       let items: RawLocationItem[] = [];
