@@ -20,8 +20,8 @@ import {
   GetCustomerWarrantiesParams,
   GetCustomerWarrantiesResponse,
   GetWarrantyDetailsResponse,
-  SubmitClaimRequest,
-  SubmitClaimResponse,
+  SubmitClaimV2Request,
+  SubmitClaimV2Response,
   GetCustomerClaimsParams,
   GetCustomerClaimsResponse,
   GetClaimDetailsResponse,
@@ -30,9 +30,12 @@ import {
   UploadAttachmentResponse,
   WarrantyServiceResponse,
   WarrantyProduct,
-  WarrantyBarcodeToProductConverter
+  WarrantyBarcodeToProductConverter,
+  StorefrontSubmitClaimRequest,
+  StorefrontSubmitClaimResponse
 } from '@/types/warranty';
 import { secureTokenStorage } from '@/services/secureTokenStorage';
+import { shippingService } from '@/services/shippingService';
 
 // Add missing helper types/guards used within this service
 type FetchResponseLike = {
@@ -478,29 +481,160 @@ export class WarrantyService {
   }
 
   /**
-   * Submit new warranty claim
+   * Submit new warranty claim (Kirimku-integrated payload)
    */
-  async submitClaim(data: SubmitClaimRequest): Promise<WarrantyServiceResponse<SubmitClaimResponse>> {
+  async submitClaim(data: SubmitClaimV2Request): Promise<WarrantyServiceResponse<SubmitClaimV2Response>> {
     try {
+      // Resolve destination (warranty service center)
+      const destination = (await shippingService.getDestinations()).default_destination;
+
+      // Build pickup (customer) and destination (service center) addresses
+      const pickup_address = {
+        name: data.customer_name,
+        phone: data.customer_phone || '',
+        address: data.customer_address || data.address_details?.street || '',
+        district: data.address_location?.district || '',
+        city: data.address_details?.city || data.address_location?.city || '',
+        province: data.address_details?.state || data.address_location?.province || '',
+        postal_code: data.address_details?.postal_code || data.address_location?.postal_code || '',
+        country: data.address_details?.country || 'Indonesia',
+      };
+
+      const destination_address = {
+        name: destination?.name || 'Warranty Service Center',
+        phone: destination?.phone || '',
+        address: destination?.address || '',
+        district: destination?.area_name || destination?.city || '',
+        city: destination?.city || '',
+        province: destination?.province || '',
+        postal_code: destination?.postal_code || '',
+        country: 'Indonesia',
+      };
+
+      // Parse courier and service from UI selection
+      const [courierIdRaw = '', serviceIdRaw = ''] = (data.logistic_service || '').split('-', 2);
+      const courier = courierIdRaw.trim().toLowerCase();
+      const rawService = serviceIdRaw.trim().toLowerCase();
+      let service_type: string;
+      if (!rawService) {
+        service_type = courier ? `${courier}_reg` : '';
+      } else if (rawService.includes('_')) {
+        service_type = rawService;
+      } else {
+        service_type = courier ? `${courier}_${rawService}` : rawService;
+      }
+
+      // Map priority to severity
+      const severityMap: Record<string, 'low' | 'medium' | 'high' | 'critical'> = {
+        low: 'low',
+        medium: 'medium',
+        high: 'high',
+        urgent: 'critical',
+      };
+      const severity = severityMap[data.priority || 'medium'] || 'medium';
+
+      // Contact info for claim
+      const contact_info = {
+        name: data.customer_name,
+        email: data.customer_email,
+        phone: data.customer_phone || '',
+        address: pickup_address.address,
+        city: pickup_address.city,
+        postal_code: pickup_address.postal_code,
+        preferred_contact: 'email' as const,
+      };
+
+      // Compose storefront claim payload
+      const storefrontPayload: StorefrontSubmitClaimRequest = {
+        warranty_id: data.barcode,
+        issue_type: 'defect',
+        description: data.issue_description,
+        severity,
+        contact_info,
+        // TODO: Hardcoded product_info defaults from test_claim_complete.sh#L254-312
+        // Replace with real product details from warranty/product context.
+        product_info: {
+          serial_number: 'SN123456789',
+          purchase_date: '2024-01-15T10:00:00Z',
+          purchase_location: 'Official Store Jakarta',
+          usage_frequency: 'daily',
+          environment: 'indoor',
+        },
+        preferred_resolution: 'repair',
+        shipping_details: {
+          courier,
+          service_type,
+          weight: 1.5,
+          // TODO: Hardcoded dimensions and package_category from test_claim_complete.sh#L254-312
+          // Replace with values collected from the claim form.
+          length: 30.0,
+          width: 20.0,
+          height: 10.0,
+          with_insurance: false,
+          pickup_method: data.courier_type,
+          cod: false,
+          package_category: 'electronics',
+          notes: 'Warranty claim package - handle with care',
+          pickup_address,
+          destination_address,
+        },
+      };
+
       const url = this.buildWarrantyUrl('claims/submit');
-      const response = await this.makeRequest<SubmitClaimResponse>(url, {
+      const response = await this.makeRequest<StorefrontSubmitClaimResponse>(url, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(storefrontPayload),
       });
+
+      // Map storefront response to existing V2 response shape
+      const d = response.data;
+      const mapped: SubmitClaimV2Response = {
+        success: response.success,
+        message: response.message,
+        claim: {
+          id: d.claim_id,
+          claim_number: d.claim_number || '',
+          warranty_id: d.warranty_id,
+          barcode: d.warranty_id,
+          status: (d.status as unknown as SubmitClaimV2Response['claim']['status']) ?? 'pending',
+          issue_description: d.description || data.issue_description,
+          created_at: d.created_at || new Date().toISOString(),
+          updated_at: d.updated_at || new Date().toISOString(),
+        },
+      };
+
+      if (d.shipping_info) {
+        const costNum = typeof d.shipping_info.shipping_cost === 'string'
+          ? Number(d.shipping_info.shipping_cost)
+          : Number(d.shipping_info.shipping_cost || 0);
+        mapped.shipping_info = {
+          booking_id: d.shipping_info.booking_id || '',
+          invoice_code: d.shipping_info.invoice_code || '',
+          shipping_cost: costNum,
+          courier: d.shipping_info.courier || courier,
+          service_type: d.shipping_info.service_type || service_type,
+          estimated_delivery: d.shipping_info.estimated_delivery || '',
+          tracking_number: d.shipping_info.tracking_number || '',
+          status: d.shipping_info.status || 'pending',
+          payment_status: d.shipping_info.payment_status || 'unpaid',
+          payment_url: '',
+        };
+      }
+
       return {
         success: true,
-        data: response,
-        message: response.message
+        data: mapped,
+        message: response.message,
       };
     } catch (error) {
       console.error('❌ Failed to submit warranty claim:', error);
       return {
         success: false,
         error: error instanceof ApiError ? error.message : 'Failed to submit claim',
-        message: 'Failed to submit warranty claim'
+        message: 'Failed to submit warranty claim',
       };
     }
   }
@@ -817,6 +951,31 @@ export class WarrantyService {
         success: false,
         error: 'Failed to lookup warranty',
         message: 'Failed to lookup warranty'
+      };
+    }
+  }
+
+  /**
+   * Get claims by warranty ID
+   */
+  async getClaimsByWarrantyId(warrantyId: string): Promise<WarrantyServiceResponse<import('@/types/warranty').GetClaimsByWarrantyIdResponse>> {
+    try {
+      const url = this.buildWarrantyUrl(`warranties/claims/${warrantyId}`);
+      const response = await this.makeRequest<{ success: boolean; message: string; data: import('@/types/warranty').GetClaimsByWarrantyIdResponse }>(url, {
+        method: 'GET',
+      });
+
+      return {
+        success: response?.success ?? true,
+        data: response.data,
+        message: response.message || 'Claims retrieved successfully',
+      };
+    } catch (error) {
+      console.error('❌ Failed to get claims by warranty ID:', error);
+      return {
+        success: false,
+        error: error instanceof ApiError ? error.message : 'Failed to get claims by warranty ID',
+        message: 'Failed to retrieve claims',
       };
     }
   }

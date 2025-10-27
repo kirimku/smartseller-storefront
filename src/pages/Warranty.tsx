@@ -30,14 +30,16 @@ import { Link, useNavigate } from "react-router-dom";
 import { warrantyService } from "@/services/warrantyService";
 import { 
   WarrantyProduct, 
-  SubmitClaimRequest, 
   ValidateBarcodeResponse,
   GetCustomerWarrantiesResponse,
   ClaimFormData,
   LogisticService,
   WarrantyBarcode,
   CustomerWarrantyRegistrationRequest,
-  CustomerWarrantyRegistrationResponse
+  CustomerWarrantyRegistrationResponse,
+  GetClaimsByWarrantyIdResponse,
+  WarrantyClaimByWarrantyItem,
+  SubmitClaimV2Request
 } from "@/types/warranty";
 
 // Mock warranty data - will be replaced with API calls
@@ -145,9 +147,37 @@ export default function Warranty() {
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
   const [isSubmittingClaim, setIsSubmittingClaim] = useState(false);
+  const [claimsByWarranty, setClaimsByWarranty] = useState<WarrantyClaimByWarrantyItem[] | null>(null);
+  const [isLoadingClaims, setIsLoadingClaims] = useState(false);
   
   // Warranty history
   const [warrantyHistory, setWarrantyHistory] = useState<WarrantyProduct[]>([]);
+
+  // Fetch claims when viewing details of a product or status detail
+  useEffect(() => {
+    const warrantyIdToFetch =
+      currentStep === "details"
+        ? product?.id
+        : currentStep === "status-detail"
+        ? selectedHistoryItem?.id
+        : undefined;
+
+    if (warrantyIdToFetch) {
+      (async () => {
+        try {
+          setIsLoadingClaims(true);
+          const result = await warrantyService.getClaimsByWarrantyId(warrantyIdToFetch);
+          setClaimsByWarranty(result.success ? (result.data?.claims ?? []) : []);
+        } catch (e) {
+          setClaimsByWarranty([]);
+        } finally {
+          setIsLoadingClaims(false);
+        }
+      })();
+    } else {
+      setClaimsByWarranty(null);
+    }
+  }, [currentStep, product?.id, selectedHistoryItem?.id]);
   
   // Form state
   const [claimForm, setClaimForm] = useState<ClaimFormData>({
@@ -189,6 +219,11 @@ export default function Warranty() {
         language: 'en',
         timezone: 'UTC'
       }
+    },
+    proof_of_purchase: {
+      document_type: 'image',
+      document_url: '',
+      uploaded_at: ''
     }
   });
   const [proofOfPurchaseFile, setProofOfPurchaseFile] = useState<File | null>(null);
@@ -355,14 +390,28 @@ export default function Warranty() {
 
     setIsSubmittingClaim(true);
     try {
-      const claimData: SubmitClaimRequest = {
+      const logisticSelection = claimForm.logisticService?.trim() || '';
+      const courierType: 'pickup' | 'dropoff' = logisticSelection === 'pickup' ? 'dropoff' : 'pickup';
+      
+      const claimData: SubmitClaimV2Request = {
         barcode: product.barcodeId || product.id,
         issue_description: claimForm.issueDescription,
         customer_name: claimForm.customerName,
         customer_email: claimForm.email,
         customer_phone: claimForm.phone,
         customer_address: claimForm.address,
-        priority: claimForm.priority || 'medium'
+        priority: claimForm.priority || 'medium',
+        courier_type: courierType,
+        logistic_service: logisticSelection,
+        payment_method: 'QRIS',
+        address_details: {
+          street: claimForm.address || '',
+          city: '',
+          state: '',
+          postal_code: '',
+          country: 'Indonesia'
+        },
+        address_location: {}
       };
 
       const response = await warrantyService.submitClaim(claimData);
@@ -413,12 +462,14 @@ export default function Warranty() {
          
          if (uploadResponse.success && uploadResponse.data) {
            // Update the registration form with the uploaded document details
+           const docType: 'pdf' | 'image' = file.type === 'application/pdf' ? 'pdf' : 'image';
            setRegistrationForm(prev => ({
              ...prev,
              proof_of_purchase: {
-               document_type: uploadResponse.data!.document_type,
+               ...(prev.proof_of_purchase ?? {}),
+               document_type: docType,
                document_url: uploadResponse.data!.document_url,
-               uploaded_at: new Date().toISOString()
+               uploaded_at: new Date().toISOString(),
              }
            }));
          } else {
@@ -485,22 +536,14 @@ export default function Warranty() {
     setIsScannerOpen(false);
   };
 
-  const updateRegistrationForm = (field: string, value: string | number) => {
+  const updateRegistrationForm = (field: keyof CustomerWarrantyRegistrationRequest, value: string | number) => {
     setRegistrationForm(prev => ({
       ...prev,
       [field]: value
-    }));
+    } as CustomerWarrantyRegistrationRequest));
   };
 
-  const updateNestedRegistrationForm = (section: 'customer_info' | 'proof_of_purchase', field: string, value: string | number | boolean) => {
-    setRegistrationForm(prev => ({
-      ...prev,
-      [section]: {
-        ...prev[section],
-        [field]: value
-      }
-    }));
-  };
+
 
   const renderLookupStep = () => (
     <div className="space-y-6">
@@ -780,6 +823,37 @@ export default function Warranty() {
                 Claim Warranty
               </Button>
             )}
+            <Separator className="my-6" />
+
+            <div className="space-y-3">
+              <h3 className="font-medium">Related Claims</h3>
+              {isLoadingClaims && (
+                <div className="flex items-center text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Loading claims...
+                </div>
+              )}
+              {!isLoadingClaims && claimsByWarranty && claimsByWarranty.length === 0 && (
+                <p className="text-sm text-muted-foreground">No claims found for this warranty.</p>
+              )}
+              {!isLoadingClaims && claimsByWarranty && claimsByWarranty.length > 0 && (
+                <div className="space-y-2">
+                  {claimsByWarranty.map((c) => (
+                    <div key={c.claim_id} className="flex items-center justify-between p-3 border rounded-md">
+                      <div className="space-y-1">
+                        <div className="text-sm font-medium">Claim #{c.claim_number}</div>
+                        <div className="text-xs text-muted-foreground">
+                          Submitted {new Date(c.submitted_at).toLocaleDateString()} • Status: {c.status}
+                        </div>
+                      </div>
+                      <Link to={`/warranty/claim/${c.claim_id}`} className="text-sm text-primary underline">
+                        View
+                      </Link>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </Card>
       </div>
@@ -866,6 +940,38 @@ export default function Warranty() {
               Register Warranty
             </Button>
           )}
+
+          <Separator className="my-6" />
+
+          <div className="space-y-3">
+            <h3 className="font-medium">Related Claims</h3>
+            {isLoadingClaims && (
+              <div className="flex items-center text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Loading claims...
+              </div>
+            )}
+            {!isLoadingClaims && claimsByWarranty && claimsByWarranty.length === 0 && (
+              <p className="text-sm text-muted-foreground">No claims found for this warranty.</p>
+            )}
+            {!isLoadingClaims && claimsByWarranty && claimsByWarranty.length > 0 && (
+              <div className="space-y-2">
+                {claimsByWarranty.map((c) => (
+                  <div key={c.claim_id} className="flex items-center justify-between p-3 border rounded-md">
+                    <div className="space-y-1">
+                      <div className="text-sm font-medium">Claim #{c.claim_number}</div>
+                      <div className="text-xs text-muted-foreground">
+                        Submitted {new Date(c.submitted_at).toLocaleDateString()} • Status: {c.status}
+                      </div>
+                    </div>
+                    <Link to={`/warranty/claim/${c.claim_id}`} className="text-sm text-primary underline">
+                      View
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </Card>
       </div>
     );
@@ -1150,7 +1256,13 @@ export default function Warranty() {
                     id="first-name"
                     placeholder="Enter first name"
                     value={registrationForm.customer_info.first_name}
-                    onChange={(e) => updateNestedRegistrationForm('customer_info', 'first_name', e.target.value)}
+                    onChange={(e) => setRegistrationForm(prev => ({
+                      ...prev,
+                      customer_info: {
+                        ...prev.customer_info,
+                        first_name: e.target.value,
+                      }
+                    }))}
                   />
                 </div>
                 <div>
@@ -1159,7 +1271,13 @@ export default function Warranty() {
                     id="last-name"
                     placeholder="Enter last name"
                     value={registrationForm.customer_info.last_name}
-                    onChange={(e) => updateNestedRegistrationForm('customer_info', 'last_name', e.target.value)}
+                    onChange={(e) => setRegistrationForm((prev) => ({
+                      ...prev,
+                      customer_info: {
+                        ...prev.customer_info,
+                        last_name: e.target.value,
+                      }
+                    }))}
                   />
                 </div>
               </div>
@@ -1170,7 +1288,13 @@ export default function Warranty() {
                   type="email"
                   placeholder="Enter email"
                   value={registrationForm.customer_info.email}
-                  onChange={(e) => updateNestedRegistrationForm('customer_info', 'email', e.target.value)}
+                  onChange={(e) => setRegistrationForm((prev) => ({
+                    ...prev,
+                    customer_info: {
+                      ...prev.customer_info,
+                      email: e.target.value,
+                    }
+                  }))}
                 />
               </div>
               <div>
@@ -1179,7 +1303,13 @@ export default function Warranty() {
                   id="phone"
                   placeholder="Enter phone number"
                   value={registrationForm.customer_info.phone_number}
-                  onChange={(e) => updateNestedRegistrationForm('customer_info', 'phone_number', e.target.value)}
+                  onChange={(e) => setRegistrationForm((prev) => ({
+                    ...prev,
+                    customer_info: {
+                      ...prev.customer_info,
+                      phone_number: e.target.value,
+                    }
+                  }))}
                 />
               </div>
             </div>

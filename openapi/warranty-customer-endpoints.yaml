@@ -618,7 +618,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/SubmitClaimWithKirimkuRequest'
+              $ref: '#/components/schemas/SubmitClaimV2Request'
       responses:
         '200':
           description: Warranty claim submitted successfully
@@ -634,7 +634,7 @@ paths:
                     type: string
                     example: "Warranty claim submitted successfully"
                   data:
-                    $ref: '#/components/schemas/CustomerClaimSubmissionResponse'
+                    $ref: '#/components/schemas/SubmitClaimV2Response'
         '400':
           description: Bad request - Invalid claim data
           content:
@@ -1547,6 +1547,106 @@ components:
           type: string
           example: "https://payment.kirimku.com/pay/abc123"
           description: "Payment URL for shipping cost"
+
+    SubmitClaimV2Request:
+      type: object
+      required:
+        - barcode
+        - issue_description
+        - customer_name
+        - customer_email
+        - courier_type
+        - logistic_service
+        - payment_method
+        - address_details
+      properties:
+        barcode:
+          type: string
+          example: "WB-2024-001234567"
+          description: "Warranty barcode value"
+        issue_description:
+          type: string
+          example: "Screen flickering and touch not responsive"
+          description: "Detailed description of the issue"
+        customer_name:
+          type: string
+          example: "Jane Smith"
+        customer_email:
+          type: string
+          format: email
+          example: "jane.smith@example.com"
+        customer_phone:
+          type: string
+          example: "+6281234567891"
+        customer_address:
+          type: string
+          example: "Jl. Thamrin No. 456, Jakarta, DKI Jakarta 10230"
+        priority:
+          type: string
+          enum: [low, medium, high, urgent]
+          example: "medium"
+        courier_type:
+          type: string
+          enum: [pickup, dropoff]
+          example: "pickup"
+          description: "Preferred courier handling for product pickup/drop-off"
+        logistic_service:
+          type: string
+          example: "JNT-REG"
+          description: "Selected courier-service identifier (courierId-serviceId)"
+        payment_method:
+          type: string
+          example: "QRIS"
+        address_details:
+          type: object
+          properties:
+            street:
+              type: string
+              example: "Jl. Sudirman No. 123"
+            city:
+              type: string
+              example: "Jakarta"
+            state:
+              type: string
+              example: "DKI Jakarta"
+            postal_code:
+              type: string
+              example: "12190"
+            country:
+              type: string
+              example: "Indonesia"
+        address_location:
+          type: object
+          properties:
+            province:
+              type: string
+              example: "DKI Jakarta"
+            city:
+              type: string
+              example: "Jakarta Pusat"
+            district:
+              type: string
+              example: "Menteng"
+            postal_code:
+              type: string
+              example: "10310"
+            kelurahan:
+              type: string
+              example: "Pegangsaan"
+
+    SubmitClaimV2Response:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Warranty claim submitted successfully"
+        claim:
+          $ref: '#/components/schemas/CustomerClaimDTO'
+        shipping_info:
+          $ref: '#/components/schemas/CustomerClaimShippingInfo'
 
     CustomerClaimDTO:
       type: object

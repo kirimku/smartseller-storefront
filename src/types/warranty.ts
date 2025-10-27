@@ -388,3 +388,257 @@ export interface WarrantySearchParams extends PaginationParams {
   search?: string;
   status?: string;
 }
+
+
+// V2 claim submit types (aligned with OpenAPI SubmitClaimV2Request/Response)
+export interface CustomerClaimShippingInfo {
+  booking_id: string;
+  invoice_code: string;
+  shipping_cost: number;
+  courier: string;
+  service_type: string;
+  estimated_delivery: string; // ISO date-time
+  tracking_number: string;
+  status: string;
+  payment_status: string;
+  payment_url: string;
+}
+
+export interface SubmitClaimV2Request {
+  barcode: string;
+  issue_description: string;
+  customer_name: string;
+  customer_email: string;
+  customer_phone?: string;
+  customer_address?: string;
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  courier_type: 'pickup' | 'dropoff';
+  logistic_service: string; // Format: "courierId-serviceId"
+  payment_method: string; // e.g., "QRIS"
+  address_details: {
+    street: string;
+    city: string;
+    state: string;
+    postal_code: string;
+    country?: string;
+  };
+  address_location?: {
+    province?: string;
+    city?: string;
+    district?: string;
+    postal_code?: string;
+    kelurahan?: string;
+  };
+}
+
+export interface CustomerClaimDTO {
+  id: string;
+  claim_number: string;
+  warranty_id: string;
+  barcode: string;
+  product_name?: string;
+  status: 'pending' | 'validated' | 'in_progress' | 'completed' | 'rejected' | 'cancelled';
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  issue_category?: string;
+  issue_description: string;
+  estimated_completion?: string | null;
+  created_at: string;
+  updated_at: string;
+  last_status_update?: string;
+  can_be_cancelled?: boolean;
+  can_be_updated?: boolean;
+}
+
+export interface SubmitClaimV2Response {
+  success: boolean;
+  message: string;
+  claim: CustomerClaimDTO;
+  shipping_info?: CustomerClaimShippingInfo;
+}
+
+// Kirimku claim request/response (per KIRIMKU_CLAIM_ENDPOINT_DOCUMENTATION.md)
+export interface KirimkuContactInfo {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  postal_code: string;
+  preferred_contact: 'email' | 'phone' | 'sms';
+}
+
+export interface KirimkuShippingDetailsRequest {
+  origin_area_id: string; // area id (string per Kirimku schemas)
+  destination_area_id: string; // area id (string per Kirimku schemas)
+  weight: number; // kg
+  courier_code: string; // e.g., 'jnt', 'jne'
+  service_code: string; // e.g., 'reg', 'yes'
+}
+
+export interface KirimkuSubmitClaimRequest {
+  warranty_id: string; // barcode
+  issue_type: string; // e.g., 'defective'
+  description: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  contact_info: KirimkuContactInfo;
+  shipping_details: KirimkuShippingDetailsRequest;
+}
+
+export interface KirimkuTrackingInfo {
+  tracking_number: string;
+  status_url: string;
+  support_email: string;
+  support_phone: string;
+}
+
+export interface KirimkuShippingInfoResponse {
+  booking_id: string;
+  transaction_code: string;
+  tracking_number: string;
+  status: string;
+  courier: string;
+  service_type: string;
+  estimated_delivery: string; // ISO date-time
+  shipping_cost: string; // amount as string
+  invoice_id: string;
+  invoice_code: string;
+  external_invoice_id: string;
+  invoice_amount: string;
+  payment_status: string;
+}
+
+export interface KirimkuClaimData {
+  claim_id: string;
+  claim_number: string;
+  warranty_id: string;
+  status: string;
+  issue_type: string;
+  description: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  created_at: string;
+  updated_at: string;
+  estimated_resolution: string;
+  priority: 'normal' | 'high' | 'urgent' | string;
+  next_steps: string[];
+  contact_info: KirimkuContactInfo;
+  tracking_info: KirimkuTrackingInfo;
+  shipping_info: KirimkuShippingInfoResponse;
+}
+
+export interface KirimkuSubmitClaimResponse {
+  data: KirimkuClaimData;
+  message: string;
+  success: boolean;
+}
+
+// Storefront B2B-style claim payload (matches /claims/submit test script)
+export interface StorefrontAddress {
+  name: string;
+  phone: string;
+  address: string;
+  district: string;
+  city: string;
+  province: string;
+  postal_code: string;
+  country: string;
+}
+
+export interface StorefrontShippingDetails {
+  courier: string; // e.g., 'jnt'
+  service_type: string; // e.g., 'jnt_reg'
+  weight: number; // kg
+  length?: number; // cm
+  width?: number; // cm
+  height?: number; // cm
+  with_insurance?: boolean;
+  pickup_method: 'pickup' | 'dropoff';
+  cod?: boolean;
+  package_category?: string;
+  notes?: string;
+  pickup_address: StorefrontAddress;
+  destination_address: StorefrontAddress;
+}
+
+export interface StorefrontContactInfo {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  city: string;
+  postal_code: string;
+  preferred_contact: 'email' | 'phone' | 'sms';
+}
+
+export interface StorefrontSubmitClaimRequest {
+  warranty_id: string; // barcode
+  issue_type: string; // e.g., 'defect'
+  description: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  contact_info: StorefrontContactInfo;
+  product_info?: {
+    serial_number?: string;
+    purchase_date?: string; // ISO date-time
+    purchase_location?: string;
+    usage_frequency?: string;
+    environment?: string;
+  };
+  preferred_resolution?: 'repair' | 'replace' | 'refund' | string;
+  shipping_details: StorefrontShippingDetails;
+}
+
+export interface StorefrontShippingInfoResponse {
+  booking_id?: string;
+  invoice_code?: string;
+  shipping_cost?: number | string;
+  courier?: string;
+  service_type?: string;
+  estimated_delivery?: string; // ISO date-time
+  tracking_number?: string;
+  status?: string;
+  payment_status?: string;
+}
+
+export interface StorefrontClaimData {
+  claim_id: string;
+  claim_number?: string;
+  warranty_id: string;
+  status: string;
+  description?: string;
+  severity?: 'low' | 'medium' | 'high' | 'critical' | string;
+  created_at?: string;
+  updated_at?: string;
+  shipping_info?: StorefrontShippingInfoResponse;
+}
+
+export interface StorefrontSubmitClaimResponse {
+  success: boolean;
+  message: string;
+  data: StorefrontClaimData;
+}
+
+export interface WarrantyClaimByWarrantyItem {
+  claim_id: string;
+  claim_number: string;
+  status: 'pending' | 'validated' | 'in_progress' | 'completed' | 'rejected' | 'cancelled' | string;
+  issue_type: string;
+  severity: 'low' | 'medium' | 'high' | 'critical' | string;
+  submitted_at: string;
+  updated_at: string;
+  warranty_id: string;
+  priority?: string;
+  days_open?: number;
+  last_activity?: string;
+}
+
+export interface WarrantyClaimsSummary {
+  total_claims: number;
+  open_claims: number;
+  resolved_claims: number;
+  pending_claims: number;
+}
+
+export interface GetClaimsByWarrantyIdResponse {
+  claims: WarrantyClaimByWarrantyItem[];
+  total_count: number;
+  summary: WarrantyClaimsSummary;
+}

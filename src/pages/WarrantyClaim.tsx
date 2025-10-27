@@ -13,7 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Loader2, ArrowLeft, Truck, CheckCircle, MapPin } from "lucide-react";
 import { warrantyService } from "@/services/warrantyService";
 import { shippingService } from "@/services/shippingService";
-import { type ClaimFormData, type SubmitClaimRequest, type LogisticService, type ShippingCourierOption, type ShippingLocationOption } from "@/types/warranty";
+import { type ClaimFormData, type SubmitClaimV2Request, type LogisticService, type ShippingCourierOption, type ShippingLocationOption } from "@/types/warranty";
 import { useAuth } from "@/hooks/useAuth";
 import { useTenant } from "@/contexts/TenantContext";
 import AddressPicker, { type AddressPickerValue } from "@/components/common/AddressPicker";
@@ -259,14 +259,14 @@ const WarrantyClaim: React.FC = () => {
     try {
 
       // Use RAW barcode directly per backend acceptance; no validation/ID resolution required
-      const payload: SubmitClaimRequest = {
+      const payload: SubmitClaimV2Request = {
         barcode,
         issue_description: claimForm.issueDescription,
         customer_name: claimForm.customerName,
         customer_email: claimForm.email,
         customer_phone: claimForm.phone,
         customer_address: completeAddress,
-        courier_type: courierType,
+        courier_type: courierType as 'pickup' | 'dropoff',
         logistic_service: logisticService,
         payment_method: PAYMENT_METHOD,
         address_details: {
