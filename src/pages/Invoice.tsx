@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -22,10 +22,31 @@ const formatIDR = (amount: number) =>
     amount
   );
 
+// State passed via navigate from claim submit
+type PaymentState = {
+  amount?: number | string;
+  method?: string;
+  channel?: string;
+  gateway?: string;
+  qr_string?: string;
+  qr_code?: string;
+};
+
+type ClaimState = {
+  id?: string;
+  number?: string;
+  status?: string;
+};
+
 const Invoice: React.FC = () => {
   const navigate = useNavigate();
   const { orderId } = useParams();
   const { tenant } = useTenant();
+  const location = useLocation();
+  const navState = location.state as { payment?: PaymentState; claim?: ClaimState } | undefined;
+  const payment = navState?.payment;
+  const qrString = payment?.qr_string || "";
+  const qrCodeDataUrl = payment?.qr_code || "";
 
   // Mock invoice data while backend is being fixed
   const [status, setStatus] = useState<"awaiting_payment" | "paid" | "expired">(
@@ -34,19 +55,22 @@ const Invoice: React.FC = () => {
   const [expiresIn, setExpiresIn] = useState<number>(15 * 60); // 15 minutes
 
   const amount = useMemo(() => {
-    // Simple mock: derive amount from orderId characters for demo consistency
+    const a = payment?.amount;
+    if (typeof a === "string") return Number(a) || 0;
+    if (typeof a === "number") return a;
+    // Fallback mock amount when no payment state is provided
     const base = 150000;
     const modifier = (orderId || "").split("").reduce((sum, c) => sum + c.charCodeAt(0), 0) % 50000;
     return base + modifier;
-  }, [orderId]);
+  }, [payment?.amount, orderId]);
 
   const merchantName = tenant?.branding?.storeName || tenant?.name || "SmartSeller Store";
 
   // Generate a mock QRIS payload — placeholder until backend provides actual token/payload
   const [nonce, setNonce] = useState<string>(() => Math.random().toString(36).slice(2));
   const qrPayload = useMemo(() => {
+    if (qrString) return qrString;
     // This is NOT a real QRIS EMV payload; it is a placeholder for UI testing
-    // Replace with actual QRIS string/token returned by backend later.
     const params = new URLSearchParams({
       merchant: merchantName,
       order_id: orderId || "unknown",
@@ -56,7 +80,7 @@ const Invoice: React.FC = () => {
       nonce,
     });
     return `https://pay.example/qris?${params.toString()}`;
-  }, [merchantName, orderId, amount, expiresIn, nonce]);
+  }, [merchantName, orderId, amount, expiresIn, nonce, qrString]);
 
   // Countdown for QR expiry
   useEffect(() => {
@@ -81,7 +105,7 @@ const Invoice: React.FC = () => {
 
   const handleCopyCode = async () => {
     try {
-      await navigator.clipboard.writeText(qrPayload);
+      await navigator.clipboard.writeText(qrString || qrPayload);
     } catch (e) {
       // no-op for demo; could show a toast
     }
@@ -139,7 +163,11 @@ const Invoice: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-start">
             <div className="space-y-4">
               <div className="p-4 border rounded-lg flex flex-col items-center justify-center">
-                <QRCode value={qrPayload} size={192} />
+                {qrCodeDataUrl ? (
+                  <img src={qrCodeDataUrl} alt="Payment QR Code" className="w-[192px] h-[192px]" />
+                ) : (
+                  <QRCode value={qrString || qrPayload} size={192} />
+                )}
                 <p className="text-sm text-muted-foreground mt-3">Scan with your mobile banking or e-wallet (QRIS)</p>
                 <div className="flex items-center gap-2 mt-3">
                   <Button variant="outline" size="sm" onClick={handleCopyCode}>

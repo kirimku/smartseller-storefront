@@ -402,6 +402,13 @@ export interface CustomerClaimShippingInfo {
   status: string;
   payment_status: string;
   payment_url: string;
+  // Extended payment fields from storefront/Kirimku response
+  invoice_amount?: number;
+  payment_method?: string;
+  payment_channel?: string;
+  qr_string?: string;
+  qr_code?: string; // data URL (e.g., data:image/png;base64,...)
+  payment_gateway?: string;
 }
 
 export interface SubmitClaimV2Request {
@@ -596,6 +603,13 @@ export interface StorefrontShippingInfoResponse {
   tracking_number?: string;
   status?: string;
   payment_status?: string;
+  // Extended payment/QR fields from storefront (KIRIMKU)
+  invoice_amount?: number | string;
+  payment_method?: string;
+  payment_channel?: string;
+  qr_string?: string;
+  qr_code?: string; // data URL
+  payment_gateway?: string;
 }
 
 export interface StorefrontClaimData {

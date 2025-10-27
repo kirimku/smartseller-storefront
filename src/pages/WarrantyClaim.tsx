@@ -41,6 +41,21 @@ const WarrantyClaim: React.FC = () => {
   // Auth guard
   const { isAuthenticated, isLoading, user } = useAuth();
   const { isLoading: tenantLoading, slug } = useTenant();
+  
+  // Ensure warrantyService has the current storefront slug
+  useEffect(() => {
+    console.log('[WarrantyClaim] Tenant slug effect', { slug });
+    if (slug) {
+      try {
+        console.log('[WarrantyClaim] Setting warrantyService slug', slug);
+        warrantyService.setStorefrontSlug(slug);
+        console.log('[WarrantyClaim] warrantyService slug set');
+      } catch (e) {
+        console.warn('Failed to set storefront slug for warrantyService:', e);
+      }
+    }
+  }, [slug]);
+
   useEffect(() => {
     if (tenantLoading || isLoading) return;
     if (!isAuthenticated) {
@@ -123,9 +138,10 @@ const WarrantyClaim: React.FC = () => {
 
       try {
         setLoadingCouriers(true);
-        
+        console.debug('[WarrantyClaim] getDestinations call');
         // Get destinations (warranty service centers)
         const destinationsResponse = await shippingService.getDestinations();
+        console.debug('[WarrantyClaim] getDestinations result', { count: destinationsResponse.destinations.length });
         if (destinationsResponse.destinations.length > 0) {
           const destination = destinationsResponse.destinations[0];
           setDestinationAddress({
@@ -137,6 +153,13 @@ const WarrantyClaim: React.FC = () => {
             postal_code: destination.postal_code
           });
           
+          console.debug('[WarrantyClaim] getStorefrontCouriers call', {
+            slug,
+            from_city: addressLocation.city || '',
+            from_district: addressLocation.district || '',
+            to_city: destination.city,
+            to_district: destination.area_name,
+          });
           // Get couriers using the customer's address location as origin
           const couriersResponse = await shippingService.getStorefrontCouriers(slug, {
             from_city: addressLocation.city || '',
@@ -151,6 +174,7 @@ const WarrantyClaim: React.FC = () => {
             cod: false,
             insurance: true
           });
+          console.debug('[WarrantyClaim] getStorefrontCouriers result', { count: couriersResponse.couriers.length });
           
           const formattedCouriers = shippingService.formatCouriersForDropdown(couriersResponse.couriers);
           setAvailableCouriers(formattedCouriers);
@@ -161,11 +185,12 @@ const WarrantyClaim: React.FC = () => {
       } catch (error) {
         console.error('Error loading shipping data:', error);
         
-        // Provide specific error messages based on error type
-        if (error.message?.includes('Authentication required')) {
+        // Provide specific error messages based on error type without using any-casts
+        const message = error instanceof Error ? error.message : '';
+        if (message.includes('Authentication required')) {
           // This should not happen anymore with the fallback, but just in case
           toast.warning('Using default warranty service center for shipping calculation');
-        } else if (error.message?.includes('Network')) {
+        } else if (message.includes('Network')) {
           toast.error('Network error. Please check your connection and try again.');
         } else {
           toast.error('Failed to load shipping options. Please try again.');
@@ -177,6 +202,7 @@ const WarrantyClaim: React.FC = () => {
       }
     };
 
+    console.debug('[WarrantyClaim] loadShippingData trigger', { locationId: addressLocation?.locationId, slug });
     loadShippingData();
   }, [addressLocation?.locationId, slug]);
 
@@ -255,8 +281,26 @@ const WarrantyClaim: React.FC = () => {
       return;
     }
 
+    // Ensure storefront slug available before calling service
+    if (!slug) {
+      setError("Storefront is initializing. Please wait a moment and retry.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
+      console.debug('[WarrantyClaim] submit payload', {
+        barcode,
+        courierType,
+        logisticService,
+        payment_method: PAYMENT_METHOD,
+        address_details: {
+          street: addressLine1,
+          city: addressLocation?.city || addressLocation?.locationName || "",
+          state: addressLocation?.province || "",
+          postal_code: addressLocation?.postalCode || "",
+        },
+      });
 
       // Use RAW barcode directly per backend acceptance; no validation/ID resolution required
       const payload: SubmitClaimV2Request = {
@@ -282,12 +326,37 @@ const WarrantyClaim: React.FC = () => {
           postal_code: addressLocation?.postalCode || undefined,
           kelurahan: addressLocation?.kelurahan || (addressLocation?.locationType === 'area' ? addressLocation?.locationName || undefined : undefined),
         },
-
       };
 
+      console.debug('[WarrantyClaim] calling submitClaim');
       const res = await warrantyService.submitClaim(payload);
+      console.debug('[WarrantyClaim] submitClaim result', { success: res.success, message: res.message });
       if (res.success) {
         setSuccessMessage(res.message || "Claim submitted successfully");
+        const claimId = res.data?.claim.id;
+        const orderId = res.data?.shipping_info?.invoice_code || claimId || "unknown";
+        // Prefer qr_string for QR payload; fall back to qr_code data URL
+        const qrString = res.data?.shipping_info?.qr_string || "";
+        const qrCodeDataUrl = res.data?.shipping_info?.qr_code || "";
+        // Navigate to invoice route and pass QR data via state
+        navigate(`/invoice/${orderId}`, {
+          state: {
+            payment: {
+              amount: res.data?.shipping_info?.invoice_amount || 0,
+              method: res.data?.shipping_info?.payment_method || "QRIS",
+              channel: res.data?.shipping_info?.payment_channel || "QRIS",
+              gateway: res.data?.shipping_info?.payment_gateway || undefined,
+              qr_string: qrString,
+              qr_code: qrCodeDataUrl,
+            },
+            claim: {
+              id: res.data?.claim.id,
+              number: res.data?.claim.claim_number,
+              status: res.data?.claim.status,
+            },
+          },
+          replace: true,
+        });
       } else {
         setError(res.error || res.message || "Failed to submit claim");
       }

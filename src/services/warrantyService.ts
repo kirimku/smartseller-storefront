@@ -621,6 +621,13 @@ export class WarrantyService {
           status: d.shipping_info.status || 'pending',
           payment_status: d.shipping_info.payment_status || 'unpaid',
           payment_url: '',
+          // Extended payment/QR fields used by Invoice page
+          invoice_amount: typeof d.shipping_info.invoice_amount === 'string' ? Number(d.shipping_info.invoice_amount) : Number(d.shipping_info.invoice_amount || 0),
+          payment_method: d.shipping_info.payment_method || undefined,
+          payment_channel: d.shipping_info.payment_channel || undefined,
+          qr_string: d.shipping_info.qr_string || undefined,
+          qr_code: d.shipping_info.qr_code || undefined,
+          payment_gateway: d.shipping_info.payment_gateway || undefined,
         };
       }
 

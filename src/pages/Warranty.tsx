@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { warrantyService } from "@/services/warrantyService";
+import { useTenant } from "@/contexts/TenantContext";
 import { 
   WarrantyProduct, 
   ValidateBarcodeResponse,
@@ -130,7 +131,22 @@ type WarrantyStep = "lookup" | "details" | "claim-form" | "submitted" | "status-
 
 export default function Warranty() {
   const navigate = useNavigate();
-  
+  const { slug } = useTenant();
+
+  // Ensure warrantyService has the current storefront slug
+  useEffect(() => {
+    console.log('[Warranty] Tenant slug effect', { slug });
+    if (slug) {
+      try {
+        console.log('[Warranty] Setting warrantyService slug', slug);
+        warrantyService.setStorefrontSlug(slug);
+        console.log('[Warranty] warrantyService slug set');
+      } catch (e) {
+        console.warn('Failed to set storefront slug for warrantyService:', e);
+      }
+    }
+  }, [slug]);
+
   // State management
   const [currentStep, setCurrentStep] = useState<WarrantyStep>("lookup");
   const [warrantyId, setWarrantyId] = useState("");
@@ -275,12 +291,16 @@ export default function Warranty() {
     };
   };
 
-  // Load warranty history on component mount
+  // Load warranty history once storefront slug is available
   useEffect(() => {
+    if (!slug) return;
+    console.log('[Warranty] loadWarrantyHistory triggered', { slug });
     const loadWarrantyHistory = async () => {
       setIsLoadingHistory(true);
       try {
+        console.log('[Warranty] getCustomerWarranties call', { page: 1, limit: 10 });
         const response = await warrantyService.getCustomerWarranties({ page: 1, limit: 10 });
+        console.log('[Warranty] getCustomerWarranties result', { success: response.success, count: response.data?.warranties?.length });
         if (response.success && response.data) {
           const products = response.data.warranties.map(convertBarcodeToProduct);
           setWarrantyHistory(products);
@@ -295,7 +315,7 @@ export default function Warranty() {
     };
 
     loadWarrantyHistory();
-  }, []);
+  }, [slug]);
 
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
@@ -324,8 +344,10 @@ export default function Warranty() {
     }
 
     setIsLoading(true);
+    console.log('[Warranty] handleLookup', { warrantyId: warrantyId.trim(), slug });
     try {
       const response = await warrantyService.lookupWarranty(warrantyId.trim());
+      console.log('[Warranty] lookup result', { success: response.success, message: response.message });
       if (response.success && response.data) {
         setLookupMessage(response.message || "");
         setProduct(response.data);
@@ -353,9 +375,12 @@ export default function Warranty() {
     
     if (scannerMode === "lookup") {
       setWarrantyId(scannedCode);
+      console.log('[Warranty] handleBarcodeScanned lookup', { scannedCode });
       
       try {
+        console.log('[Warranty] lookup scanned code call');
         const response = await warrantyService.lookupWarranty(scannedCode);
+        console.log('[Warranty] lookup scanned result', { success: response.success, message: response.message });
         if (response.success && response.data) {
           setLookupMessage(response.message || "");
           setProduct(response.data);
@@ -416,7 +441,28 @@ export default function Warranty() {
 
       const response = await warrantyService.submitClaim(claimData);
       if (response.success) {
-        setCurrentStep("submitted");
+        const claimId = response.data?.claim.id;
+        const orderId = response.data?.shipping_info?.invoice_code || claimId || "unknown";
+        const qrString = response.data?.shipping_info?.qr_string || "";
+        const qrCodeDataUrl = response.data?.shipping_info?.qr_code || "";
+        navigate(`/invoice/${orderId}`, {
+          state: {
+            payment: {
+              amount: response.data?.shipping_info?.invoice_amount || 0,
+              method: response.data?.shipping_info?.payment_method || "QRIS",
+              channel: response.data?.shipping_info?.payment_channel || "QRIS",
+              gateway: response.data?.shipping_info?.payment_gateway || undefined,
+              qr_string: qrString,
+              qr_code: qrCodeDataUrl,
+            },
+            claim: {
+              id: response.data?.claim.id,
+              number: response.data?.claim.claim_number,
+              status: response.data?.claim.status,
+            },
+          },
+          replace: true,
+        });
       } else {
         setError(response.error || "Failed to submit claim. Please try again.");
       }
@@ -515,7 +561,11 @@ export default function Warranty() {
     // Defer API call briefly to align with test timing expectations
     setTimeout(async () => {
       try {
+        console.log('[Warranty] calling registerWarranty', { slug, barcode: registrationData.barcode_value });
         const response = await warrantyService.registerWarranty(registrationData);
+        if ('success' in response) {
+          console.log('[Warranty] registerWarranty result', { success: response.success });
+        }
         if ('success' in response && response.success) {
           setRegistrationSuccess(response.data || response);
           setCurrentStep("register-success");
@@ -1407,101 +1457,97 @@ export default function Warranty() {
     </div>
   );
 
-  const renderRegistrationSuccessStep = () => {
-    if (!registrationSuccess) return null;
+  const renderRegistrationSuccessStep = () => (
+    <div className="space-y-6">
+      <div className="text-center">
+        <CheckCircle className="h-16 w-16 text-green-600 mx-auto mb-4" />
+        <h1 className="text-2xl font-bold mb-2">Registration Successful!</h1>
+        <p className="text-muted-foreground">
+          Your warranty has been registered successfully
+        </p>
+      </div>
 
-    return (
-      <div className="space-y-6">
-        <div className="text-center">
-          <CheckCircle className="h-16 w-16 text-green-600 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold mb-2">Registration Successful!</h1>
-          <p className="text-muted-foreground">
-            Your warranty has been registered successfully
-          </p>
-        </div>
-
-        <Card className="p-6">
-          <div className="space-y-4">
-            <div>
-              <h3 className="font-semibold text-lg mb-2">Registration Details</h3>
-              <div className="space-y-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Registration ID:</span>
-                  <span className="font-mono">{registrationSuccess.registration_id}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Warranty ID:</span>
-                  <span className="font-mono">{registrationSuccess.warranty_id}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Product:</span>
-                  <span>{registrationSuccess.product.name}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Activation Date:</span>
-                  <span>{new Date(registrationSuccess.activation_date).toLocaleDateString()}</span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Expiry Date:</span>
-                  <span>{new Date(registrationSuccess.expiry_date).toLocaleDateString()}</span>
-                </div>
+      <Card className="p-6">
+        <div className="space-y-4">
+          <div>
+            <h3 className="font-semibold text-lg mb-2">Registration Details</h3>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Registration ID:</span>
+                <span className="font-mono">{registrationSuccess.registration_id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Warranty ID:</span>
+                <span className="font-mono">{registrationSuccess.warranty_id}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Product:</span>
+                <span>{registrationSuccess.product.name}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Activation Date:</span>
+                <span>{new Date(registrationSuccess.activation_date).toLocaleDateString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Expiry Date:</span>
+                <span>{new Date(registrationSuccess.expiry_date).toLocaleDateString()}</span>
               </div>
             </div>
           </div>
-        </Card>
-
-        <div className="space-y-2">
-          <Button 
-            onClick={() => {
-              setCurrentStep('lookup');
-              setRegistrationSuccess(null);
-              setRegistrationForm({
-                barcode_value: '',
-                product_sku: '',
-                serial_number: '',
-                purchase_date: '',
-                purchase_price: undefined,
-                retailer_name: '',
-                retailer_address: '',
-                invoice_number: '',
-                customer_info: {
-                  first_name: '',
-                  last_name: '',
-                  email: '',
-                  phone_number: '',
-                  address: {
-                    street: '',
-                    city: '',
-                    state: '',
-                    postal_code: '',
-                    country: ''
-                  },
-                  date_of_birth: '',
-                  preferences: {
-                    email_notifications: true,
-                    sms_notifications: false,
-                    language: 'en',
-                    timezone: 'UTC'
-                  }
-                },
-                proof_of_purchase: {
-                  document_type: 'image',
-                  document_url: '',
-                  uploaded_at: new Date().toISOString()
-                }
-              });
-            }}
-            className="w-full"
-          >
-            Register Another Product
-          </Button>
-          <Button variant="outline" asChild className="w-full">
-            <Link to="/">Return to Home</Link>
-          </Button>
         </div>
+      </Card>
+
+      <div className="space-y-2">
+        <Button 
+          onClick={() => {
+            setCurrentStep('lookup');
+            setRegistrationSuccess(null);
+            setRegistrationForm({
+              barcode_value: '',
+              product_sku: '',
+              serial_number: '',
+              purchase_date: '',
+              purchase_price: undefined,
+              retailer_name: '',
+              retailer_address: '',
+              invoice_number: '',
+              customer_info: {
+                first_name: '',
+                last_name: '',
+                email: '',
+                phone_number: '',
+                address: {
+                  street: '',
+                  city: '',
+                  state: '',
+                  postal_code: '',
+                  country: ''
+                },
+                date_of_birth: '',
+                preferences: {
+                  email_notifications: true,
+                  sms_notifications: false,
+                  language: 'en',
+                  timezone: 'UTC'
+                }
+              },
+              proof_of_purchase: {
+                document_type: 'image',
+                document_url: '',
+                uploaded_at: new Date().toISOString()
+              }
+            });
+          }}
+          className="w-full"
+        >
+          Register Another Product
+        </Button>
+        <Button variant="outline" asChild className="w-full">
+          <Link to="/">Return to Home</Link>
+        </Button>
       </div>
-    );
-  };
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-background pb-24">

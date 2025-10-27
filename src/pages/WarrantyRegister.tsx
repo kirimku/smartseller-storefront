@@ -78,7 +78,22 @@ const WarrantyRegister: React.FC = () => {
 
   // Auth guard: require login to access register page
   const { isAuthenticated, isLoading, user } = useAuth();
-  const { isLoading: tenantLoading } = useTenant();
+  const { isLoading: tenantLoading, slug } = useTenant();
+
+  // Ensure warrantyService has the current storefront slug
+  useEffect(() => {
+    console.log('[WarrantyRegister] Tenant slug effect', { slug });
+    if (slug) {
+      try {
+        console.log('[WarrantyRegister] Setting warrantyService slug', slug);
+        warrantyService.setStorefrontSlug(slug);
+        console.log('[WarrantyRegister] warrantyService slug set');
+      } catch (e) {
+        console.warn('Failed to set storefront slug for warrantyService:', e);
+      }
+    }
+  }, [slug]);
+
   useEffect(() => {
     // Wait for tenant and auth to finish initializing before deciding
     if (tenantLoading || isLoading) return;
@@ -91,9 +106,11 @@ const WarrantyRegister: React.FC = () => {
   // Validate barcode when provided to derive product fields
   useEffect(() => {
     const runValidation = async () => {
-      if (!barcode) return;
+      if (!barcode || !slug) return;
       try {
+        console.log('[WarrantyRegister] validateBarcode call', { barcode, slug });
         const res = await warrantyService.validateBarcode(barcode);
+        console.log('[WarrantyRegister] validateBarcode result', { success: res.success });
         if (res.success && res.data) {
           const data = res.data as ValidateBarcodeResponse;
           // Pull from either classic or alternate shape
@@ -101,7 +118,7 @@ const WarrantyRegister: React.FC = () => {
           const serial = data.warranty?.barcode_value || data.warranty?.barcode || data.warranty_barcode?.barcode_string || barcode;
           setProductSku(String(sku));
           setSerialNumber(String(serial));
-
+  
           // Normalize details for top-of-form display
           const details = {
             name: data.product?.name || data.warranty_barcode?.product_name,
@@ -131,7 +148,7 @@ const WarrantyRegister: React.FC = () => {
       }
     };
     runValidation();
-  }, [barcode]);
+  }, [barcode, slug]);
 
   const isFormValid = useMemo(() => {
     // Registration requires barcode and a selected proof file
@@ -217,7 +234,14 @@ const WarrantyRegister: React.FC = () => {
       return;
     }
 
+    // Ensure storefront slug available before calling service
+    if (!slug) {
+      setError("Storefront is initializing. Please wait a moment and retry.");
+      return;
+    }
+
     setIsSubmitting(true);
+    console.log('[WarrantyRegister] register submit', { barcode, hasProof: !!proofOfPurchase, slug });
 
     try {
       // Build FormData for registration: barcode and optional proof of purchase
@@ -226,7 +250,9 @@ const WarrantyRegister: React.FC = () => {
       if (proofOfPurchase) {
         formData.append('proof_of_purchase', proofOfPurchase);
       }
+      console.log('[WarrantyRegister] calling registerWarranty');
       const res = await warrantyService.registerWarranty(formData);
+      console.log('[WarrantyRegister] registerWarranty result', { success: 'success' in res ? res.success : undefined });
       if ('success' in res && res.success) {
         setSuccessMessage('Warranty registered successfully!');
         // Navigate back to warranties list after short delay
@@ -258,158 +284,104 @@ const WarrantyRegister: React.FC = () => {
         <Card className="p-6">
           <h2 className="text-2xl font-bold mb-2">Register New Product</h2>
           <p className="text-muted-foreground mb-4">
-            Register your product for warranty coverage. Admin will verify and activate your warranty.
+            Scan or input the product warranty barcode, then upload proof of purchase to register.
           </p>
-          
-          {/* Display validated product warranty details at the top */}
+
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 mb-4">
+            <div>
+              <Label>Warranty Barcode</Label>
+              <Input
+                value={barcode}
+                onChange={(e) => setBarcode(e.target.value)}
+                placeholder="Enter or scan product barcode"
+                className="mt-2"
+              />
+            </div>
+            <div className="flex items-end">
+              <Button variant="outline" onClick={() => setIsScanning(true)}>
+                <QrCode className="h-4 w-4 mr-2" /> Scan Barcode
+              </Button>
+            </div>
+          </div>
+
+          {/* Validated product details preview */}
           {validatedDetails && (
-            <div className="mb-4">
-              <div className="flex items-start gap-4">
-                <div className="flex-1">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-lg font-semibold">
-                        {validatedDetails.name || "Product"}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        {validatedDetails.brand ? `${validatedDetails.brand} • ` : ""}
-                        {validatedDetails.model || "Model N/A"}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm mt-2">
-                    <div className="text-muted-foreground">SKU</div>
-                    <div>{validatedDetails.sku || productSku || "-"}</div>
-                    <div className="text-muted-foreground">Warranty</div>
-                    <div>{validatedDetails.warranty_period || "-"}</div>
-                    <div className="text-muted-foreground">Serial</div>
-                    <div>{serialNumber || "-"}</div>
-                  </div>
-                </div>
-                {/* Image placeholder or validated image */}
-                <img
-                  src={validatedDetails.image_url || "/placeholder.svg"}
-                  alt="Product"
-                  className="w-16 h-16 rounded border"
-                />
+            <div className="bg-muted/50 border rounded p-3 mb-4">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm font-medium">Detected Product</span>
+              </div>
+              <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                <span><span className="font-medium">Name:</span> {validatedDetails.name || '-'}</span>
+                <span><span className="font-medium">Model:</span> {validatedDetails.model || '-'}</span>
+                <span><span className="font-medium">Category:</span> {validatedDetails.category || '-'}</span>
+                <span><span className="font-medium">Status:</span> {validatedDetails.status || '-'}</span>
+                <span><span className="font-medium">Expiry:</span> {validatedDetails.expiry_date || '-'}</span>
+                <span><span className="font-medium">Activated:</span> {validatedDetails.activated_at || '-'}</span>
               </div>
             </div>
           )}
-          <Separator className="my-4" />
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <Label htmlFor="barcode">Barcode *</Label>
-                <div className="flex gap-2 mt-1">
-                  <Input
-                    id="barcode"
-                    placeholder="Enter barcode"
-                    value={barcode}
-                    onChange={(e) => setBarcode(e.target.value)}
-                  />
-                  <Button type="button" variant="secondary" onClick={() => setIsScanning(true)}>
-                    <QrCode className="h-4 w-4 mr-2" /> Scan
-                  </Button>
-                </div>
-              </div>
-            </div>
+          <Separator />
 
-            <div>
-              <Label htmlFor="proof_of_purchase" className="block mb-1">Proof of Purchase *</Label>
-                <div className="mt-1">
-                  <input
-                    ref={fileInputRef}
-                    id="proof_of_purchase"
-                    type="file"
-                    accept="image/*,.pdf"
-                    onChange={handleProofOfPurchaseChange}
-                    className="sr-only"
-                  />
-                  <div className="flex items-center h-10">
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => fileInputRef.current?.click()}
-                      className="h-10"
-                    >
-                      <Upload className="h-4 w-4 mr-2" /> Choose file
-                    </Button>
-                    {proofOfPurchase && (
-                      <span className="ml-3 text-sm text-muted-foreground truncate max-w-[240px]">
-                        {proofOfPurchase.name}
-                      </span>
-                    )}
-                  </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Required. Upload receipt, invoice, or other proof of purchase (JPG, PNG, PDF, max 5MB)
-                </p>
-              </div>
-              
-              {/* Removed immediate upload; file will be sent with registration */}
-              
-              {/* Removed immediate upload status UI; file is attached on submit */}
-              
+          {/* Proof of Purchase Upload */}
+          <div className="space-y-3 mt-4">
+            <Label>Proof of Purchase*</Label>
+            <div className="flex items-center gap-3">
+              <Input type="file" accept="image/*,application/pdf" onChange={handleProofOfPurchaseChange} ref={fileInputRef} />
               {proofOfPurchase && (
-                <div className="mt-2">
-                  <div className="flex items-center gap-2 text-sm text-green-600">
-                    <CheckCircle className="h-4 w-4" />
-                    <span>File selected</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-                    <FileText className="h-4 w-4" />
-                    <span>{proofOfPurchase.name} ({proofOfPurchase.type === 'application/pdf' ? 'PDF' : 'IMAGE'})</span>
-                  </div>
-                </div>
-              )}
-              
-              {proofOfPurchasePreview && proofOfPurchase?.type.startsWith('image/') && (
-                <div className="mt-2">
-                  <img
-                    src={proofOfPurchasePreview}
-                    alt="Proof of purchase preview"
-                    className="max-w-xs max-h-32 object-contain border rounded"
-                  />
-                </div>
+                <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
+                  <Upload className="h-4 w-4 mr-2" /> Replace File
+                </Button>
               )}
             </div>
-
-            <Separator className="my-2" />
-
-            {error && (
-              <div className="text-red-600 text-sm">{error}</div>
-            )}
-            {successMessage && (
-              <div className="text-green-600 text-sm flex items-center">
-                <CheckCircle className="h-4 w-4 mr-1" /> {successMessage}
+            {proofOfPurchasePreview && (
+              <div className="mt-2">
+                <img src={proofOfPurchasePreview} alt="Proof Preview" className="h-32 rounded border" />
               </div>
             )}
+          </div>
 
-            <div className="flex gap-2 pt-2">
-              <Button type="submit" disabled={!isFormValid || isSubmitting} className="h-10 px-4">
-                {isSubmitting ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Submitting...
-                  </>
-                ) : (
-                  <>Register Product</>
-                )}
-              </Button>
-              <Button type="button" variant="outline" onClick={() => navigate("/warranty")}>
-                Cancel
-              </Button>
-            </div>
-          </form>
+          <Separator />
+
+          {/* Submit */}
+          <Button type="submit" className="w-full mt-6" onClick={handleSubmit} disabled={!isFormValid || isSubmitting}>
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" /> Registering...
+              </>
+            ) : (
+              "Register Warranty"
+            )}
+          </Button>
+
+          {error && (
+            <div className="text-sm text-red-600 mt-2" role="alert">{error}</div>
+          )}
+
+          {successMessage && (
+            <div className="text-sm text-green-600 mt-2">{successMessage}</div>
+          )}
         </Card>
 
-        <BarcodeScanner 
-          isOpen={isScanning}
-          onClose={() => setIsScanning(false)}
-          onScan={(code) => handleScanResult(code)}
-          title="Scan Barcode"
-          description="Position the barcode within the camera view"
-        />
+        {/* Barcode Scanner Modal */}
+        {isScanning && (
+          <Card className="p-4 mt-4">
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <QrCode className="h-4 w-4" />
+                <span className="text-sm font-medium">Scan Warranty Barcode</span>
+              </div>
+              <Button variant="ghost" onClick={() => setIsScanning(false)}>Close</Button>
+            </div>
+            {/* Pass required isOpen prop to Scanner */}
+            <BarcodeScanner isOpen={isScanning} onScan={handleScanResult} onClose={() => setIsScanning(false)} />
+          </Card>
+        )}
       </div>
+
+      {/* Bottom Navigation */}
+      <MobileNav activeTab="warranty" onTabChange={handleTabChange} />
     </div>
   );
 };
