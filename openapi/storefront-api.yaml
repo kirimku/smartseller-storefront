@@ -13,8 +13,12 @@ info:
     url: https://opensource.org/licenses/MIT
 
 servers:
-  - url: http://localhost:8080/api/v1
-    description: Development server
+  - url: http://localhost:8090/api/v1
+    description: Local development server
+  - url: https://smartseller-api.preproduction.kirimku.com/api/v1
+    description: Preproduction API server
+  - url: https://api-seller.kirimku.app/api/v1
+    description: Seller API server
   - url: https://api.smartseller.com/api/v1
     description: Production server
 

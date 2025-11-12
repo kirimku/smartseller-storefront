@@ -33,13 +33,13 @@ info:
     url: https://opensource.org/licenses/MIT
 
 servers:
-  - url: http://localhost:8080
+  - url: http://localhost:8090/api/v1
     description: Local development server
-  - url: https://api-dev.smartseller.com
-    description: Development server
-  - url: https://api-staging.smartseller.com
-    description: Staging server
-  - url: https://api.smartseller.com
+  - url: https://smartseller-api.preproduction.kirimku.com/api/v1
+    description: Preproduction API server
+  - url: https://api-seller.kirimku.app/api/v1
+    description: Seller API server
+  - url: https://api.smartseller.com/api/v1
     description: Production server
 
 # Import paths from separate files
@@ -68,6 +68,53 @@ paths:
   
   /api/v1/auth/resend-verification:
     $ref: './auth-endpoints.yaml#/paths/~1api~1v1~1auth~1resend-verification'
+
+  # CSRF bootstrap endpoint
+  /api/v1/csrf-token:
+    get:
+      summary: Get CSRF token and set CSRF cookie
+      description: |
+        Returns a CSRF token and sets a secure `XSRF-TOKEN` cookie for state-changing requests.
+        Client should include the returned token via `X-CSRF-Token` header for unsafe methods.
+      tags:
+        - Authentication
+      responses:
+        '200':
+          description: CSRF token issued
+          headers:
+            Set-Cookie:
+              description: "Sets `XSRF-TOKEN` cookie scoped to API domain"
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "CSRF token issued"
+                  data:
+                    type: object
+                    properties:
+                      csrf_token:
+                        type: string
+                        example: "f78b8c8f-3a5f-44f1-b2f1-1c48c43df9b2"
+                  meta:
+                    type: object
+                    properties:
+                      http_status:
+                        type: integer
+                        example: 200
+        '500':
+          description: Server error issuing token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
   
   # User management endpoints
   /api/v1/users/profile:

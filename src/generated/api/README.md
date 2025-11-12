@@ -54,6 +54,7 @@ Class | Method | HTTP request | Description
 *AuthenticationApi* | [**apiV1AuthForgotPasswordPost**](docs/AuthenticationApi.md#apiv1authforgotpasswordpost) | **POST** /api/v1/auth/forgot-password | Initiate Password Reset
 *AuthenticationApi* | [**apiV1AuthLoginPost**](docs/AuthenticationApi.md#apiv1authloginpost) | **POST** /api/v1/auth/login | Login with email/phone and password
 *AuthenticationApi* | [**apiV1AuthResetPasswordPost**](docs/AuthenticationApi.md#apiv1authresetpasswordpost) | **POST** /api/v1/auth/reset-password | Reset Password
+*AuthenticationApi* | [**apiV1CsrfTokenGet**](docs/AuthenticationApi.md#apiv1csrftokenget) | **GET** /api/v1/csrf-token | Get CSRF token and set CSRF cookie
 *DefaultApi* | [**apiV1AuthGoogleCallbackPost**](docs/DefaultApi.md#apiv1authgooglecallbackpost) | **POST** /api/v1/auth/google/callback | Google Login Callback
 *DefaultApi* | [**apiV1AuthGoogleLoginGet**](docs/DefaultApi.md#apiv1authgoogleloginget) | **GET** /api/v1/auth/google/login | Get Google Login URL
 *DefaultApi* | [**apiV1AuthLogoutPost**](docs/DefaultApi.md#apiv1authlogoutpost) | **POST** /api/v1/auth/logout | Logout
@@ -78,6 +79,8 @@ Class | Method | HTTP request | Description
  - [ApiV1AuthRefreshPost200ResponseData](docs/ApiV1AuthRefreshPost200ResponseData.md)
  - [ApiV1AuthResetPasswordPost200Response](docs/ApiV1AuthResetPasswordPost200Response.md)
  - [ApiV1AuthResetPasswordPostRequest](docs/ApiV1AuthResetPasswordPostRequest.md)
+ - [ApiV1CsrfTokenGet200Response](docs/ApiV1CsrfTokenGet200Response.md)
+ - [ApiV1CsrfTokenGet200ResponseData](docs/ApiV1CsrfTokenGet200ResponseData.md)
  - [ErrorResponse](docs/ErrorResponse.md)
  - [ErrorResponseMeta](docs/ErrorResponseMeta.md)
  - [SuccessResponse](docs/SuccessResponse.md)

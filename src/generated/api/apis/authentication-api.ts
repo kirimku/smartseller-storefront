@@ -34,6 +34,8 @@ import type { ApiV1AuthResetPasswordPost200Response } from '../models';
 // @ts-ignore
 import type { ApiV1AuthResetPasswordPostRequest } from '../models';
 // @ts-ignore
+import type { ApiV1CsrfTokenGet200Response } from '../models';
+// @ts-ignore
 import type { ErrorResponse } from '../models';
 /**
  * AuthenticationApi - axios parameter creator
@@ -149,6 +151,36 @@ export const AuthenticationApiAxiosParamCreator = function (configuration?: Conf
                 options: localVarRequestOptions,
             };
         },
+        /**
+         * Issues a CSRF token and sets a secure cookie for subsequent unsafe requests. 
+         * @summary Get CSRF token and set CSRF cookie
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        apiV1CsrfTokenGet: async (options: RawAxiosRequestConfig = {}): Promise<RequestArgs> => {
+            const localVarPath = `/api/v1/csrf-token`;
+            // use dummy base URL string because the URL constructor only accepts absolute URLs.
+            const localVarUrlObj = new URL(localVarPath, DUMMY_BASE_URL);
+            let baseOptions;
+            if (configuration) {
+                baseOptions = configuration.baseOptions;
+            }
+
+            const localVarRequestOptions = { method: 'GET', ...baseOptions, ...options};
+            const localVarHeaderParameter = {} as any;
+            const localVarQueryParameter = {} as any;
+
+
+    
+            setSearchParams(localVarUrlObj, localVarQueryParameter);
+            let headersFromBaseOptions = baseOptions && baseOptions.headers ? baseOptions.headers : {};
+            localVarRequestOptions.headers = {...localVarHeaderParameter, ...headersFromBaseOptions, ...options.headers};
+
+            return {
+                url: toPathString(localVarUrlObj),
+                options: localVarRequestOptions,
+            };
+        },
     }
 };
 
@@ -198,6 +230,18 @@ export const AuthenticationApiFp = function(configuration?: Configuration) {
             const localVarOperationServerBasePath = operationServerMap['AuthenticationApi.apiV1AuthResetPasswordPost']?.[localVarOperationServerIndex]?.url;
             return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
         },
+        /**
+         * Issues a CSRF token and sets a secure cookie for subsequent unsafe requests. 
+         * @summary Get CSRF token and set CSRF cookie
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        async apiV1CsrfTokenGet(options?: RawAxiosRequestConfig): Promise<(axios?: AxiosInstance, basePath?: string) => AxiosPromise<ApiV1CsrfTokenGet200Response>> {
+            const localVarAxiosArgs = await localVarAxiosParamCreator.apiV1CsrfTokenGet(options);
+            const localVarOperationServerIndex = configuration?.serverIndex ?? 0;
+            const localVarOperationServerBasePath = operationServerMap['AuthenticationApi.apiV1CsrfTokenGet']?.[localVarOperationServerIndex]?.url;
+            return (axios, basePath) => createRequestFunction(localVarAxiosArgs, globalAxios, BASE_PATH, configuration)(axios, localVarOperationServerBasePath || basePath);
+        },
     }
 };
 
@@ -238,6 +282,15 @@ export const AuthenticationApiFactory = function (configuration?: Configuration,
         apiV1AuthResetPasswordPost(apiV1AuthResetPasswordPostRequest: ApiV1AuthResetPasswordPostRequest, options?: RawAxiosRequestConfig): AxiosPromise<ApiV1AuthResetPasswordPost200Response> {
             return localVarFp.apiV1AuthResetPasswordPost(apiV1AuthResetPasswordPostRequest, options).then((request) => request(axios, basePath));
         },
+        /**
+         * Issues a CSRF token and sets a secure cookie for subsequent unsafe requests. 
+         * @summary Get CSRF token and set CSRF cookie
+         * @param {*} [options] Override http request option.
+         * @throws {RequiredError}
+         */
+        apiV1CsrfTokenGet(options?: RawAxiosRequestConfig): AxiosPromise<ApiV1CsrfTokenGet200Response> {
+            return localVarFp.apiV1CsrfTokenGet(options).then((request) => request(axios, basePath));
+        },
     };
 };
 
@@ -276,6 +329,15 @@ export interface AuthenticationApiInterface {
      * @memberof AuthenticationApiInterface
      */
     apiV1AuthResetPasswordPost(apiV1AuthResetPasswordPostRequest: ApiV1AuthResetPasswordPostRequest, options?: RawAxiosRequestConfig): AxiosPromise<ApiV1AuthResetPasswordPost200Response>;
+
+    /**
+     * Issues a CSRF token and sets a secure cookie for subsequent unsafe requests. 
+     * @summary Get CSRF token and set CSRF cookie
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof AuthenticationApiInterface
+     */
+    apiV1CsrfTokenGet(options?: RawAxiosRequestConfig): AxiosPromise<ApiV1CsrfTokenGet200Response>;
 
 }
 
@@ -320,6 +382,17 @@ export class AuthenticationApi extends BaseAPI implements AuthenticationApiInter
      */
     public apiV1AuthResetPasswordPost(apiV1AuthResetPasswordPostRequest: ApiV1AuthResetPasswordPostRequest, options?: RawAxiosRequestConfig) {
         return AuthenticationApiFp(this.configuration).apiV1AuthResetPasswordPost(apiV1AuthResetPasswordPostRequest, options).then((request) => request(this.axios, this.basePath));
+    }
+
+    /**
+     * Issues a CSRF token and sets a secure cookie for subsequent unsafe requests. 
+     * @summary Get CSRF token and set CSRF cookie
+     * @param {*} [options] Override http request option.
+     * @throws {RequiredError}
+     * @memberof AuthenticationApi
+     */
+    public apiV1CsrfTokenGet(options?: RawAxiosRequestConfig) {
+        return AuthenticationApiFp(this.configuration).apiV1CsrfTokenGet(options).then((request) => request(this.axios, this.basePath));
     }
 }
 

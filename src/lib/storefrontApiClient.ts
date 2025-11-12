@@ -6,6 +6,7 @@
  */
 
 import { useTenant } from '@/contexts/TenantContext';
+import { csrfService } from '@/services/csrfService';
 
 // Types based on OpenAPI specification
 export interface CustomerRegistrationRequest {
@@ -183,7 +184,7 @@ export class StorefrontApiClient {
     // Build headers, only set Content-Type when we have a request body
     const providedHeaders = (options.headers as Record<string, string>) || {};
     const hasBody = options.body !== undefined && options.body !== null;
-    const headers: Record<string, string> = {
+    let headers: Record<string, string> = {
       ...providedHeaders,
       'X-Storefront-Slug': storefrontSlug,
       ...(hasBody ? { 'Content-Type': providedHeaders['Content-Type'] || 'application/json' } : {}),
@@ -191,6 +192,15 @@ export class StorefrontApiClient {
 
     if (this.accessToken && !headers.Authorization) {
       headers.Authorization = `Bearer ${this.accessToken}`;
+    }
+
+    // Ensure CSRF token is bootstrapped and inject for unsafe methods
+    try {
+      await csrfService.bootstrapIfNeeded();
+      headers = csrfService.injectCsrfHeader(headers, options.method);
+    } catch (e) {
+      // Non-blocking: requests without CSRF will be rejected server-side
+      console.warn('CSRF header injection failed (non-blocking):', e);
     }
     // Debug: outbound request details (do not log full secrets)
     try {
@@ -216,6 +226,7 @@ export class StorefrontApiClient {
     const response = await fetch(url, {
       ...options,
       headers,
+      credentials: 'include',
     });
 
     // Debug: inbound response details

@@ -6,6 +6,8 @@ import './index.css'
 import { pwaCacheManager } from './utils/pwa-cache-manager'
 // Activate global fetch interceptor to coordinate token refresh and request retries
 import { tokenRefreshInterceptor } from './services/tokenRefreshInterceptor'
+import { csrfService } from './services/csrfService'
+import { setupAxios } from './services/axiosSetup'
 
 // ===== DEBUG: Environment Variables =====
 console.log('🔍 ===== ENVIRONMENT VARIABLES DEBUG =====');
@@ -53,5 +55,20 @@ try {
 } catch (e) {
   console.warn('⚠️ TokenRefreshInterceptor init warning:', e);
 }
+
+// Initialize global Axios configuration and CSRF header injection
+try {
+  setupAxios();
+  console.log('✅ Axios setup initialized with credentials and CSRF injection');
+} catch (e) {
+  console.warn('⚠️ Axios setup initialization failed:', e);
+}
+
+// Bootstrap CSRF token as early as possible
+csrfService.bootstrapIfNeeded(true).then((token) => {
+  console.log('🛡️ CSRF token bootstrapped:', token ? `${token.substring(0, 8)}...` : '(none)');
+}).catch((err) => {
+  console.warn('⚠️ CSRF bootstrap failed:', err);
+});
 
 createRoot(document.getElementById("root")!).render(<App />);

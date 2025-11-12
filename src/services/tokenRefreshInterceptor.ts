@@ -11,6 +11,7 @@
 
 import { jwtTokenManager } from './jwtTokenManager';
 import { secureTokenStorage } from './secureTokenStorage';
+import { csrfService } from '@/services/csrfService';
 
 interface QueuedRequest {
   resolve: (value: Response) => void;
@@ -43,6 +44,7 @@ class TokenRefreshInterceptor {
         '/api/v1/auth/login',
         '/api/v1/auth/register',
         '/api/v1/auth/refresh',
+        '/api/v1/csrf-token',
         // Storefront-scoped auth endpoints
         '/auth/login',
         '/auth/register',
@@ -90,6 +92,22 @@ class TokenRefreshInterceptor {
     // Skip interception when explicitly requested via header or for excluded endpoints
     if (skipByHeader || this.shouldSkipInterception(url)) {
       return this.originalFetch(input, options);
+    }
+
+    // Ensure cookies included for CSRF/refresh flows
+    try {
+      if (!options.credentials) {
+        options.credentials = 'include';
+      }
+    } catch (_) {}
+
+    // Bootstrap CSRF and inject header for unsafe methods
+    try {
+      await csrfService.bootstrapIfNeeded();
+      const hdrs = (options.headers as Record<string, string>) || {};
+      options.headers = csrfService.injectCsrfHeader(hdrs, options.method);
+    } catch (_) {
+      // non-blocking
     }
 
     // Add authorization header if token exists

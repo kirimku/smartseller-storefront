@@ -79,20 +79,16 @@ export class TenantResolver implements TenantDatabaseResolver {
     
     const isLocalhost = this.isLocalhostEnvironment(hostname);
     const domain = this.extractDomain(hostname);
-    
-    // Hardcode tenant slug to "rexus" - can be overridden by environment variable
-    const Tenant = import.meta.env.VITE_TENANT_SLUG || 'rexus';
-    let tenantId: string | null = Tenant;
-    let slug: string | null = Tenant;
+    // Prefer explicit tenant slug from environment when provided
+    const envSlug = (import.meta.env.VITE_TENANT_SLUG || '').trim() || null;
+    let tenantId: string | null = envSlug;
+    let slug: string | null = envSlug;
     let subdomain: string | null = null;
     let detectionMethod: TenantResolutionInfo['detectionMethod'] = 'none';
 
-    // Tenant is hardcoded to "rexus" - detection methods are disabled
-    // Uncomment the methods below if you want to re-enable dynamic tenant detection
-    
-    /*
+    // Dynamic detection methods
     // Method 1: Subdomain detection (primary method)
-    if (!isLocalhost) {
+    if (!tenantId && !isLocalhost) {
       const subdomainInfo = this.extractSubdomain(hostname);
       if (subdomainInfo) {
         subdomain = subdomainInfo;
@@ -128,7 +124,6 @@ export class TenantResolver implements TenantDatabaseResolver {
       slug = this.config.defaultTenant;
       detectionMethod = 'none'; // No detection method used, using default
     }
-    */
 
     return {
       tenantId,
@@ -147,8 +142,7 @@ export class TenantResolver implements TenantDatabaseResolver {
   async getTenantBySlug(slug: string): Promise<TenantConfig | null> {
     // Dev-mode short-circuit to avoid network calls
     // TODO: fix this routing development mode
-    // if (this.config.developmentMode || import.meta.env.DEV || true) {
-    if (true) {
+    if (this.config.developmentMode) {
       const mock: TenantConfig = {
         id: `tenant-${slug}`,
         name: slug.charAt(0).toUpperCase() + slug.slice(1),
@@ -306,8 +300,7 @@ export class TenantResolver implements TenantDatabaseResolver {
     }
 
     // In development, short-circuit to SHARED to avoid network errors
-    // if (this.config.developmentMode) {
-    if (true) {
+    if (this.config.developmentMode) {
       const devType = TenantType.SHARED;
       this.typeCache.set(tenantId, devType);
       return devType;
@@ -442,7 +435,8 @@ export const defaultTenantResolverConfig: TenantResolverConfig = {
   enablePathBasedRouting: false,
   enableQueryParamFallback: true,
   productionDomains: ['smartseller.com'],
-  developmentMode: import.meta.env.DEV || true,
+  // Explicit toggle to use mock tenant data in development
+  developmentMode: Boolean(import.meta.env.VITE_USE_MOCK_TENANT) || false,
 };
 
 /**

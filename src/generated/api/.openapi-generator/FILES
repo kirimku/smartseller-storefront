@@ -1,5 +1,6 @@
 .gitignore
 .npmignore
+.openapi-generator-ignore
 README.md
 api.ts
 apis/authentication-api.ts
@@ -23,6 +24,8 @@ docs/ApiV1AuthRefreshPost200Response.md
 docs/ApiV1AuthRefreshPost200ResponseData.md
 docs/ApiV1AuthResetPasswordPost200Response.md
 docs/ApiV1AuthResetPasswordPostRequest.md
+docs/ApiV1CsrfTokenGet200Response.md
+docs/ApiV1CsrfTokenGet200ResponseData.md
 docs/AuthenticationApi.md
 docs/DefaultApi.md
 docs/ErrorResponse.md
@@ -47,6 +50,8 @@ models/api-v1-auth-refresh-post200-response-data.ts
 models/api-v1-auth-refresh-post200-response.ts
 models/api-v1-auth-reset-password-post-request.ts
 models/api-v1-auth-reset-password-post200-response.ts
+models/api-v1-csrf-token-get200-response-data.ts
+models/api-v1-csrf-token-get200-response.ts
 models/error-response-meta.ts
 models/error-response.ts
 models/index.ts

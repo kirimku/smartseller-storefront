@@ -13,6 +13,7 @@ import {
   ApiError
 } from '@/lib/storefrontApiClient';
 import { secureTokenStorage, type TokenData, type CustomerData } from './secureTokenStorage';
+import { csrfService } from '@/services/csrfService';
 
 // Safe debug helper to avoid errors when console is unavailable
 function safeDebug(label: string, data?: unknown): void {
@@ -159,9 +160,19 @@ export class CustomerService {
    */
   async login(credentials: LoginRequest): Promise<AuthResponse> {
     try {
+      // Sanitize inputs and bootstrap CSRF to comply with server requirements
+      const sanitize = (v: string | undefined) => v ? v.replace(/[\n\r\t]/g, ' ').trim() : v;
+      const safeCreds: LoginRequest = {
+        email: sanitize(credentials.email),
+        phone: sanitize(credentials.phone),
+        password: credentials.password,
+        rememberMe: credentials.rememberMe,
+      };
+      await csrfService.bootstrapIfNeeded();
+
       const response = await this.apiClient.loginCustomer(
         this.getStorefrontSlug(),
-        credentials
+        safeCreds
       );
 
       // Store authentication data
@@ -189,17 +200,20 @@ export class CustomerService {
   async register(data: RegisterRequest): Promise<AuthResponse> {
     try {
       // Prepare registration request
+      const sanitize = (v: string | undefined) => v ? v.replace(/[\n\r\t]/g, ' ').trim() : v;
       const registrationRequest: CustomerRegistrationRequest = {
-        email: data.email,
+        email: sanitize(data.email)!,
         password: data.password,
-        first_name: data.first_name,
-        last_name: data.last_name,
-        phone: data.phone,
-        ...(data.date_of_birth ? { date_of_birth: data.date_of_birth } : {}),
+        first_name: sanitize(data.first_name)!,
+        last_name: sanitize(data.last_name)!,
+        phone: sanitize(data.phone),
+        ...(data.date_of_birth ? { date_of_birth: sanitize(data.date_of_birth) } : {}),
         ...(data.gender ? { gender: data.gender } : {}),
         ...(data.tags ? { tags: data.tags } : {}),
         ...(data.preferences ? { preferences: data.preferences } : {}),
       };
+
+      await csrfService.bootstrapIfNeeded();
 
       // Perform registration via storefront API
       const registrationResponse = await this.apiClient.registerCustomer(
@@ -210,8 +224,8 @@ export class CustomerService {
       // Registration successful, now automatically log in the user
       // to get proper authentication tokens
       const loginCredentials: LoginRequest = {
-        email: data.email,
-        password: data.password,
+        email: registrationRequest.email,
+        password: registrationRequest.password,
       };
 
       // Perform automatic login after successful registration
@@ -327,9 +341,12 @@ export class CustomerService {
    */
   async requestPasswordReset(data: PasswordResetRequest): Promise<void> {
     try {
+      const sanitize = (v: string | undefined) => v ? v.replace(/[\n\r\t]/g, ' ').trim() : v;
+      const email = sanitize(data.email)!;
+      await csrfService.bootstrapIfNeeded();
       await this.apiClient.requestPasswordReset(
         this.getStorefrontSlug(),
-        data.email
+        email
       );
     } catch (error) {
       console.error('Password reset request failed:', error);
@@ -345,9 +362,13 @@ export class CustomerService {
    */
   async confirmPasswordReset(data: PasswordResetConfirm): Promise<void> {
     try {
+      const sanitize = (v: string | undefined) => v ? v.replace(/[\n\r\t]/g, ' ').trim() : v;
+      const token = sanitize(data.token)!;
+      // Do not sanitize password content to avoid altering intended value
+      await csrfService.bootstrapIfNeeded();
       await this.apiClient.resetPassword(
         this.getStorefrontSlug(),
-        data.token,
+        token,
         data.newPassword
       );
     } catch (error) {
@@ -364,9 +385,12 @@ export class CustomerService {
    */
   async verifyEmail(data: EmailVerificationRequest): Promise<void> {
     try {
+      const sanitize = (v: string | undefined) => v ? v.replace(/[\n\r\t]/g, ' ').trim() : v;
+      const token = sanitize(data.token)!;
+      await csrfService.bootstrapIfNeeded();
       await this.apiClient.verifyEmail(
         this.getStorefrontSlug(),
-        data.token
+        token
       );
     } catch (error) {
       console.error('Email verification failed:', error);
@@ -382,7 +406,10 @@ export class CustomerService {
    */
   async resendEmailVerification(email: string): Promise<void> {
     try {
-      await this.apiClient.resendEmailVerification(this.getStorefrontSlug(), email);
+      const sanitize = (v: string | undefined) => v ? v.replace(/[\n\r\t]/g, ' ').trim() : v;
+      const cleanEmail = sanitize(email)!;
+      await csrfService.bootstrapIfNeeded();
+      await this.apiClient.resendEmailVerification(this.getStorefrontSlug(), cleanEmail);
     } catch (error) {
       console.error('Failed to resend verification email:', error);
       if (error instanceof ApiError) {

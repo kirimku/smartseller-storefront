@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: smartseller-storefront
+  namespace: smartseller
+  labels:
+    app: smartseller
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'
+    cloud.google.com/backend-config: '{"default": "smartseller-storefront-backendconfig"}'
+spec:
+  type: ClusterIP
+  selector:
+    app: smartseller
+    tier: frontend
+    component: storefront
+  ports:
+    - name: http
+      port: 5173
+      targetPort: 5173

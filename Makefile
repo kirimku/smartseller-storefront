@@ -18,7 +18,7 @@ BLUE := \033[0;34m
 NC := \033[0m # No Color
 
 # Environment-specific variables
-VITE_API_URL := https://smartseller-api.preproduction.kirimku.com
+VITE_API_BASE_URL := https://smartseller-api.preproduction.kirimku.com
 VITE_TENANT_SLUG := rexus
 
 # Default target
@@ -74,8 +74,8 @@ build: check-env ## Build Docker image
 build-preprod: check-env ## Build Docker image for preproduction
 	@echo "$(BLUE)Building preproduction Docker image...$(NC)"
 	@echo "$(YELLOW)Tag: $(DOCKER_TAG)$(NC)"
-	@echo "$(BLUE)Using API URL: $(VITE_API_URL)$(NC)"
-	@docker build -f Dockerfile.preprod --build-arg VITE_API_URL=$(VITE_API_URL) --build-arg VITE_TENANT_SLUG=$(VITE_TENANT_SLUG) -t $(DOCKER_TAG) .
+	@echo "$(BLUE)Using API BASE URL: $(VITE_API_BASE_URL)$(NC)"
+	@docker build -f Dockerfile.preprod --build-arg VITE_API_BASE_URL=$(VITE_API_BASE_URL) --build-arg VITE_TENANT_SLUG=$(VITE_TENANT_SLUG) -t $(DOCKER_TAG) -t $(LATEST_TAG) .
 	@echo "$(GREEN)Preproduction build completed successfully!$(NC)"
 	@echo "$(BLUE)Image size:$(NC)"
 	@docker images $(IMAGE_NAME) --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
@@ -91,9 +91,9 @@ build-no-cache: check-env ## Build Docker image without cache
 build-preprod-no-cache: check-env ## Build preproduction Docker image without cache
 	@echo "$(BLUE)Building preproduction Docker image without cache...$(NC)"
 	@echo "$(YELLOW)Tag: $(DOCKER_TAG)$(NC)"
-	@echo "$(BLUE)Using API URL: $(VITE_API_URL)$(NC)"
+	@echo "$(BLUE)Using API BASE URL: $(VITE_API_BASE_URL)$(NC)"
 	@echo "$(YELLOW)Note: This will take longer as it rebuilds all layers from scratch$(NC)"
-	@docker build --no-cache -f Dockerfile.preprod --build-arg VITE_API_URL=$(VITE_API_URL) --build-arg VITE_TENANT_SLUG=$(VITE_TENANT_SLUG) -t $(DOCKER_TAG) .
+	@docker build --no-cache -f Dockerfile.preprod --build-arg VITE_API_BASE_URL=$(VITE_API_BASE_URL) --build-arg VITE_TENANT_SLUG=$(VITE_TENANT_SLUG) -t $(DOCKER_TAG) -t $(LATEST_TAG) .
 	@echo "$(GREEN)Preproduction build (no cache) completed successfully!$(NC)"
 	@echo "$(BLUE)Image size:$(NC)"
 	@docker images $(IMAGE_NAME) --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}"
@@ -201,7 +201,7 @@ deploy-registry: build push ## Build and deploy to GitHub Container Registry
 	@echo "$(BLUE)To pull the image:$(NC)"
 	@echo "  docker pull $(DOCKER_TAG)"
 	@echo "$(BLUE)To run the image:$(NC)"
-	@echo "  docker run -p 3000:3000 $(DOCKER_TAG)"
+	@echo "  docker run -p 3000:5173 $(DOCKER_TAG)"
 
 .PHONY: deploy-latest
 deploy-latest: ## Deploy latest version to GHCR (use current git tag/commit)
@@ -210,7 +210,7 @@ deploy-latest: ## Deploy latest version to GHCR (use current git tag/commit)
 .PHONY: deploy-preprod-registry
 deploy-preprod-registry: build-preprod-no-cache push ## Build preprod image (no cache) and deploy to GitHub Container Registry
 	@echo "$(GREEN)Preproduction deployment to GHCR completed successfully!$(NC)"
-	@echo "$(BLUE)Built with API URL: $(VITE_API_URL)$(NC)"
+	@echo "$(BLUE)Built with API BASE URL: $(VITE_API_BASE_URL)$(NC)"
 	@echo "$(BLUE)Image available at: $(DOCKER_TAG)$(NC)"
 	@echo ""
 	@echo "$(BLUE)To pull the preproduction image:$(NC)"
@@ -254,12 +254,12 @@ pull: login-registry ## Pull image from GitHub Container Registry
 .PHONY: run
 run: ## Run the latest image locally
 	@echo "$(BLUE)Running $(APP_NAME) locally...$(NC)"
-	@docker run --rm -it --name $(APP_NAME) -p 3000:3000 $(LATEST_TAG)
+	@docker run --rm -it --name $(APP_NAME) -p 3000:5173 $(LATEST_TAG)
 
 .PHONY: run-detached
 run-detached: ## Run the latest image in detached mode
 	@echo "$(BLUE)Running $(APP_NAME) in detached mode...$(NC)"
-	@docker run -d --name $(APP_NAME) -p 3000:3000 --restart unless-stopped $(LATEST_TAG)
+	@docker run -d --name $(APP_NAME) -p 3000:5173 --restart unless-stopped $(LATEST_TAG)
 	@echo "$(GREEN)Container started! Access at: http://localhost:3000$(NC)"
 	@echo "$(BLUE)To stop: docker stop $(APP_NAME)$(NC)"
 	@echo "$(BLUE)To view logs: docker logs -f $(APP_NAME)$(NC)"
@@ -421,3 +421,157 @@ docker-rebuild: ## Rebuild Docker image and restart
 	@docker-compose build --no-cache
 	@docker-compose up -d
 	@echo "$(GREEN)Docker image rebuilt and restarted$(NC)"
+
+# Kubernetes (GKE Autopilot) deployment parameters
+K8S_NAMESPACE ?= smartseller
+K8S_DEPLOYMENT ?= smartseller-storefront
+K8S_MANIFEST_DIR ?= deploy/gke/autopilot
+IMAGE_REPO ?= $(IMAGE_NAME)
+IMAGE_TAG ?= $(VERSION)
+K8S_CONTEXT ?=
+
+# Local Kubernetes (Kind) parameters
+KIND_CLUSTER_NAME ?= smartseller-local
+K8S_LOCAL_NAMESPACE ?= smartseller-local
+K8S_LOCAL_MANIFEST_DIR ?= deploy/local/kind
+K8S_CONTEXT_LOCAL ?= kind-$(KIND_CLUSTER_NAME)
+
+# Kubernetes (GKE Autopilot) deploy commands
+k8s-create-secret-db:
+	@echo "Creating/updating Kubernetes secret 'smartseller-db' in namespace $(K8S_NAMESPACE)..."
+	@command -v kubectl >/dev/null 2>&1 || { echo "Error: kubectl not installed"; exit 1; }
+	@if [ -z "$$DB_USER" ] || [ -z "$$DB_PASSWORD" ] || [ -z "$$DB_NAME" ] || [ -z "$$INSTANCE_CONNECTION_NAME" ]; then \
+		echo "Info: Attempting to load DB_* and INSTANCE_CONNECTION_NAME from .env"; \
+		if [ -f .env ]; then \
+			export $$(grep -v '^#' .env | xargs); \
+		fi; \
+	fi; \
+	if [ -z "$$DB_USER" ] || [ -z "$$DB_PASSWORD" ] || [ -z "$$DB_NAME" ] || [ -z "$$INSTANCE_CONNECTION_NAME" ]; then \
+		echo "Error: Missing required variables. Provide DB_USER, DB_PASSWORD, DB_NAME, INSTANCE_CONNECTION_NAME"; \
+		echo "Usage: make k8s-create-secret-db DB_USER=... DB_PASSWORD=... DB_NAME=... INSTANCE_CONNECTION_NAME=..."; \
+		exit 1; \
+	fi; \
+	kubectl $(if $(K8S_CONTEXT),--context $(K8S_CONTEXT)) -n $(K8S_NAMESPACE) create secret generic smartseller-db \
+		--from-literal=DB_USER=$$DB_USER \
+		--from-literal=DB_PASSWORD=$$DB_PASSWORD \
+		--from-literal=DB_NAME=$$DB_NAME \
+		--from-literal=INSTANCE_CONNECTION_NAME=$$INSTANCE_CONNECTION_NAME \
+		--dry-run=client -o yaml | kubectl $(if $(K8S_CONTEXT),--context $(K8S_CONTEXT)) apply -f -
+
+k8s-apply-autopilot:
+	@echo "Applying core manifests in namespace $(K8S_NAMESPACE) from '$(K8S_MANIFEST_DIR)'..."
+	@command -v kubectl >/dev/null 2>&1 || { echo "Error: kubectl not installed"; exit 1; }
+	@kubectl $(if $(K8S_CONTEXT),--context $(K8S_CONTEXT)) apply -f $(K8S_MANIFEST_DIR)/namespace.yaml
+	@test -f $(K8S_MANIFEST_DIR)/serviceaccount.yaml && kubectl $(if $(K8S_CONTEXT),--context $(K8S_CONTEXT)) apply -f $(K8S_MANIFEST_DIR)/serviceaccount.yaml || true
+	@test -f $(K8S_MANIFEST_DIR)/backendconfig.yaml && kubectl $(if $(K8S_CONTEXT),--context $(K8S_CONTEXT)) apply -f $(K8S_MANIFEST_DIR)/backendconfig.yaml || true
+	@kubectl $(if $(K8S_CONTEXT),--context $(K8S_CONTEXT)) apply -f $(K8S_MANIFEST_DIR)/service.yaml
+	@kubectl $(if $(K8S_CONTEXT),--context $(K8S_CONTEXT)) apply -f $(K8S_MANIFEST_DIR)/deployment.yaml
+	@test -f $(K8S_MANIFEST_DIR)/ingress.yaml && kubectl $(if $(K8S_CONTEXT),--context $(K8S_CONTEXT)) apply -f $(K8S_MANIFEST_DIR)/ingress.yaml || true
+	@if [ "$(APPLY_CERT)" = "true" ] && [ -f "$(K8S_MANIFEST_DIR)/managed-certificate.yaml" ]; then \
+		echo "Applying managed certificate..."; \
+		kubectl $(if $(K8S_CONTEXT),--context $(K8S_CONTEXT)) apply -f $(K8S_MANIFEST_DIR)/managed-certificate.yaml; \
+	else \
+		echo "Skipping managed certificate (set APPLY_CERT=true to apply)"; \
+	fi
+
+k8s-create-ghcr-pull-secret:
+	@echo "Creating/updating image pull secret 'ghcr-pull-secret' in namespace $(K8S_NAMESPACE)..."
+	@command -v kubectl >/dev/null 2>&1 || { echo "Error: kubectl not installed"; exit 1; }
+	@if [ -z "$$GITHUB_TOKEN" ]; then \
+		echo "Error: GITHUB_TOKEN environment variable not set"; \
+		echo "Please export GITHUB_TOKEN with 'write:packages' permission"; \
+		exit 1; \
+	fi; \
+	kubectl $(if $(K8S_CONTEXT),--context $(K8S_CONTEXT)) -n $(K8S_NAMESPACE) create secret docker-registry ghcr-pull-secret \
+		--docker-server=$(REGISTRY) \
+		--docker-username=$(GITHUB_USER) \
+		--docker-password=$$GITHUB_TOKEN \
+		--dry-run=client -o yaml | kubectl $(if $(K8S_CONTEXT),--context $(K8S_CONTEXT)) apply -f -
+
+k8s-set-image-autopilot:
+	@echo "Setting image '$(IMAGE_REPO):$(IMAGE_TAG)' on deployment $(K8S_DEPLOYMENT) in namespace $(K8S_NAMESPACE)..."
+	@command -v kubectl >/dev/null 2>&1 || { echo "Error: kubectl not installed"; exit 1; }
+	@kubectl $(if $(K8S_CONTEXT),--context $(K8S_CONTEXT)) -n $(K8S_NAMESPACE) set image deployment/$(K8S_DEPLOYMENT) web=$(IMAGE_REPO):$(IMAGE_TAG)
+
+k8s-rollout-status-autopilot:
+	@echo "Waiting for rollout of deployment $(K8S_DEPLOYMENT) in namespace $(K8S_NAMESPACE)..."
+	@command -v kubectl >/dev/null 2>&1 || { echo "Error: kubectl not installed"; exit 1; }
+	@kubectl $(if $(K8S_CONTEXT),--context $(K8S_CONTEXT)) -n $(K8S_NAMESPACE) rollout status deployment/$(K8S_DEPLOYMENT)
+
+k8s-smoke-check:
+	@echo "Running smoke check via port-forward (localhost:18090 → svc/$(K8S_DEPLOYMENT):5173)..."
+	@command -v kubectl >/dev/null 2>&1 || { echo "Error: kubectl not installed"; exit 1; }
+	@bash -c 'set -e; kubectl $(if $(K8S_CONTEXT),--context $(K8S_CONTEXT)) -n $(K8S_NAMESPACE) port-forward svc/$(K8S_DEPLOYMENT) 18090:5173 >/tmp/portfwd.$(K8S_DEPLOYMENT).log 2>&1 & PF_PID=$$!; sleep 3; \
+		curl -fsS http://localhost:18090/health || { echo "❌ Health check failed"; kill $$PF_PID; exit 1; }; \
+		echo "✅ Health check OK"; kill $$PF_PID'
+
+deploy-autopilot: login-registry build-preprod push k8s-create-ghcr-pull-secret k8s-apply-autopilot k8s-set-image-autopilot k8s-rollout-status-autopilot k8s-smoke-check
+	@echo "✅ GKE Autopilot deploy completed. Image: $(IMAGE_REPO):$(IMAGE_TAG)"
+
+# Kind local Kubernetes helpers
+kind-create-cluster:
+	@echo "Creating Kind cluster '$(KIND_CLUSTER_NAME)' if not exists..."
+	@command -v kind >/dev/null 2>&1 || { echo "Error: kind not installed"; exit 1; }
+	@bash -c 'set -e; kind get clusters | grep -q "^$(KIND_CLUSTER_NAME)$$" || kind create cluster --name $(KIND_CLUSTER_NAME)'
+
+kind-delete-cluster:
+	@echo "Deleting Kind cluster '$(KIND_CLUSTER_NAME)'..."
+	@command -v kind >/dev/null 2>&1 || { echo "Error: kind not installed"; exit 1; }
+	@kind delete cluster --name $(KIND_CLUSTER_NAME)
+
+kind-load-image:
+	@echo "Loading image $(IMAGE_REPO):$(IMAGE_TAG) into Kind cluster '$(KIND_CLUSTER_NAME)'..."
+	@command -v kind >/dev/null 2>&1 || { echo "Error: kind not installed"; exit 1; }
+	@command -v docker >/dev/null 2>&1 || { echo "Error: docker not installed"; exit 1; }
+	@kind load docker-image $(IMAGE_REPO):$(IMAGE_TAG) --name $(KIND_CLUSTER_NAME)
+
+k8s-apply-namespace-local:
+	@echo "Ensuring local namespace exists: $(K8S_LOCAL_NAMESPACE)"
+	@command -v kubectl >/dev/null 2>&1 || { echo "Error: kubectl not installed"; exit 1; }
+	@kubectl --context $(K8S_CONTEXT_LOCAL) apply -f $(K8S_LOCAL_MANIFEST_DIR)/namespace.yaml
+
+k8s-create-secret-db-local:
+	@echo "Creating/updating Kubernetes secret 'smartseller-db' in local namespace $(K8S_LOCAL_NAMESPACE)..."
+	@command -v kubectl >/dev/null 2>&1 || { echo "Error: kubectl not installed"; exit 1; }
+	@if [ -z "$$DB_USER" ] || [ -z "$$DB_PASSWORD" ] || [ -z "$$DB_NAME" ]; then \
+		echo "Info: Attempting to load DB_* from .env"; \
+		if [ -f .env ]; then \
+			export $$(grep -v '^#' .env | xargs); \
+		fi; \
+	fi; \
+	if [ -z "$$DB_USER" ] || [ -z "$$DB_PASSWORD" ] || [ -z "$$DB_NAME" ]; then \
+		echo "Error: Missing required variables. Provide DB_USER, DB_PASSWORD, DB_NAME"; \
+		echo "Usage: make k8s-create-secret-db-local DB_USER=... DB_PASSWORD=... DB_NAME=..."; \
+		exit 1; \
+	fi; \
+	kubectl --context $(K8S_CONTEXT_LOCAL) -n $(K8S_LOCAL_NAMESPACE) create secret generic smartseller-db \
+		--from-literal=DB_USER=$$DB_USER \
+		--from-literal=DB_PASSWORD=$$DB_PASSWORD \
+		--from-literal=DB_NAME=$$DB_NAME \
+		--dry-run=client -o yaml | kubectl --context $(K8S_CONTEXT_LOCAL) apply -f -
+
+k8s-apply-local:
+	@echo "Applying local manifests in namespace $(K8S_LOCAL_NAMESPACE) from '$(K8S_LOCAL_MANIFEST_DIR)'..."
+	@command -v kubectl >/dev/null 2>&1 || { echo "Error: kubectl not installed"; exit 1; }
+	@kubectl --context $(K8S_CONTEXT_LOCAL) apply -f $(K8S_LOCAL_MANIFEST_DIR)/namespace.yaml
+	@kubectl --context $(K8S_CONTEXT_LOCAL) apply -f $(K8S_LOCAL_MANIFEST_DIR)/storefront.yaml
+
+k8s-set-image-local:
+	@echo "Setting local image '$(IMAGE_REPO):$(IMAGE_TAG)' on deployment $(K8S_DEPLOYMENT) in namespace $(K8S_LOCAL_NAMESPACE)..."
+	@command -v kubectl >/dev/null 2>&1 || { echo "Error: kubectl not installed"; exit 1; }
+	@kubectl --context $(K8S_CONTEXT_LOCAL) -n $(K8S_LOCAL_NAMESPACE) set image deployment/$(K8S_DEPLOYMENT) web=$(IMAGE_REPO):$(IMAGE_TAG)
+
+k8s-rollout-status-local:
+	@echo "Waiting for rollout of local deployment $(K8S_DEPLOYMENT) in namespace $(K8S_LOCAL_NAMESPACE)..."
+	@command -v kubectl >/dev/null 2>&1 || { echo "Error: kubectl not installed"; exit 1; }
+	@kubectl --context $(K8S_CONTEXT_LOCAL) -n $(K8S_LOCAL_NAMESPACE) rollout status deployment/$(K8S_DEPLOYMENT)
+
+k8s-smoke-check-local:
+	@echo "Running local smoke check via port-forward (localhost:18090 → svc/$(K8S_DEPLOYMENT):5173)..."
+	@command -v kubectl >/dev/null 2>&1 || { echo "Error: kubectl not installed"; exit 1; }
+	@bash -c 'set -e; kubectl --context $(K8S_CONTEXT_LOCAL) -n $(K8S_LOCAL_NAMESPACE) port-forward svc/$(K8S_DEPLOYMENT) 18090:5173 >/tmp/portfwd.$(K8S_DEPLOYMENT).local.log 2>&1 & PF_PID=$$!; sleep 3; \
+		curl -fsS http://localhost:18090/health || { echo "❌ Health check failed"; kill $$PF_PID; exit 1; }; \
+		echo "✅ Health check OK"; kill $$PF_PID'
+
+deploy-local-kind: build kind-create-cluster kind-load-image k8s-apply-namespace-local k8s-apply-local k8s-set-image-local k8s-rollout-status-local k8s-smoke-check-local
+	@echo "✅ Local Kind deploy completed. Image: $(IMAGE_REPO):$(IMAGE_TAG)"

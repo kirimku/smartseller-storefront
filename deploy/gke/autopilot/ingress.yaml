@@ -1,0 +1,52 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: smartseller
+  namespace: smartseller
+  annotations:
+    kubernetes.io/ingress.class: "gce"
+    networking.gke.io/managed-certificates: smartseller-frontend-cert, smartseller-cert
+    kubernetes.io/ingress.allow-http: "true"
+    kubernetes.io/ingress.global-static-ip-name: smartseller
+spec:
+  rules:
+    - host: seller.kirimku.app
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: smartseller-frontend
+                port:
+                  number: 5173
+    - host: api-seller.kirimku.app
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: smartseller-backend
+                port:
+                  number: 8090
+    - host: storefront.kirimku.app
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: smartseller-storefront
+                port:
+                  number: 5173
+    - host: app.rexus.id
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: smartseller-storefront
+                port:
+                  number: 5173

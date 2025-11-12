@@ -47,6 +47,7 @@ export class SmartSellerApiClient {
     return new Configuration({
       basePath: import.meta.env.VITE_API_BASE_URL || 'https://smartseller-api.preproduction.kirimku.com',
       baseOptions: {
+        withCredentials: true,
         headers: {
           'Content-Type': 'application/json',
           'X-Storefront-Slug': 'rexus',
