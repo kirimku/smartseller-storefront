@@ -5,7 +5,7 @@ metadata:
   namespace: smartseller
   annotations:
     kubernetes.io/ingress.class: "gce"
-    networking.gke.io/managed-certificates: smartseller-frontend-cert, smartseller-cert
+    networking.gke.io/managed-certificates: smartseller-frontend-cert, smartseller-cert, smartseller-storefront-cert, smartseller-rexus-cert
     kubernetes.io/ingress.allow-http: "true"
     kubernetes.io/ingress.global-static-ip-name: smartseller
 spec:

@@ -1,8 +1,8 @@
 apiVersion: networking.gke.io/v1
 kind: ManagedCertificate
 metadata:
-  name: smartseller-storefront-cert
+  name: smartseller-rexus-cert
   namespace: smartseller
 spec:
   domains:
-    - storefront.kirimku.app
+    - app.rexus.id
