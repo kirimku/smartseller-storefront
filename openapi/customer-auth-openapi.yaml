@@ -15,6 +15,8 @@ info:
 servers:
   - url: http://localhost:8090
     description: Development server
+  - url: https://api-seller.kirimku.app
+    description: Seller API server
   - url: https://api.smartseller.com
     description: Production server
 
@@ -30,6 +32,7 @@ paths:
         - Customer Authentication
       parameters:
         - $ref: '#/components/parameters/StorefrontSlug'
+        - $ref: '#/components/parameters/StorefrontSlugHeader'
       requestBody:
         required: true
         content:
@@ -117,6 +120,7 @@ paths:
         - Customer Authentication
       parameters:
         - $ref: '#/components/parameters/StorefrontSlug'
+        - $ref: '#/components/parameters/StorefrontSlugHeader'
       requestBody:
         required: true
         content:
@@ -190,6 +194,7 @@ paths:
         - Customer Authentication
       parameters:
         - $ref: '#/components/parameters/StorefrontSlug'
+        - $ref: '#/components/parameters/StorefrontSlugHeader'
       security:
         - BearerAuth: []
       responses:
@@ -240,6 +245,7 @@ paths:
         - Customer Authentication
       parameters:
         - $ref: '#/components/parameters/StorefrontSlug'
+        - $ref: '#/components/parameters/StorefrontSlugHeader'
       security:
         - BearerAuth: []
       responses:
@@ -286,6 +292,7 @@ paths:
         - Customer Authentication
       parameters:
         - $ref: '#/components/parameters/StorefrontSlug'
+        - $ref: '#/components/parameters/StorefrontSlugHeader'
       requestBody:
         required: true
         content:
@@ -348,6 +355,7 @@ paths:
         - Customer Authentication
       parameters:
         - $ref: '#/components/parameters/StorefrontSlug'
+        - $ref: '#/components/parameters/StorefrontSlugHeader'
       requestBody:
         required: true
         content:
@@ -415,6 +423,7 @@ paths:
         - Customer Authentication
       parameters:
         - $ref: '#/components/parameters/StorefrontSlug'
+        - $ref: '#/components/parameters/StorefrontSlugHeader'
       requestBody:
         required: true
         content:
@@ -475,6 +484,7 @@ paths:
         - Customer Authentication
       parameters:
         - $ref: '#/components/parameters/StorefrontSlug'
+        - $ref: '#/components/parameters/StorefrontSlugHeader'
       requestBody:
         required: true
         content:
@@ -537,6 +547,7 @@ paths:
         - Customer Authentication
       parameters:
         - $ref: '#/components/parameters/StorefrontSlug'
+        - $ref: '#/components/parameters/StorefrontSlugHeader'
       requestBody:
         required: true
         content:
@@ -601,6 +612,7 @@ paths:
         - Customer Profile
       parameters:
         - $ref: '#/components/parameters/StorefrontSlug'
+        - $ref: '#/components/parameters/StorefrontSlugHeader'
       security:
         - BearerAuth: []
       responses:
@@ -684,6 +696,7 @@ paths:
         - Customer Profile
       parameters:
         - $ref: '#/components/parameters/StorefrontSlug'
+        - $ref: '#/components/parameters/StorefrontSlugHeader'
       security:
         - BearerAuth: []
       requestBody:
@@ -812,6 +825,7 @@ paths:
         - Customer Profile
       parameters:
         - $ref: '#/components/parameters/StorefrontSlug'
+        - $ref: '#/components/parameters/StorefrontSlugHeader'
       security:
         - BearerAuth: []
       requestBody:
@@ -885,6 +899,24 @@ components:
       in: path
       required: true
       description: The unique slug identifier for the storefront
+      schema:
+        type: string
+        pattern: '^[a-z0-9-]+$'
+        minLength: 1
+        maxLength: 50
+      examples:
+        rexus:
+          summary: Rexus storefront
+          value: "rexus"
+        test-store:
+          summary: Test storefront
+          value: "test-store"
+
+    StorefrontSlugHeader:
+      name: X-Storefront-Slug
+      in: header
+      required: true
+      description: Storefront slug header used for multi-tenant routing
       schema:
         type: string
         pattern: '^[a-z0-9-]+$'

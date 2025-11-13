@@ -7,6 +7,7 @@
 
 import { useTenant } from '@/contexts/TenantContext';
 import { csrfService } from '@/services/csrfService';
+import { sanitizeSlug, sanitizePayload, sanitizeString } from '@/lib/utils';
 
 // Types based on OpenAPI specification
 export interface CustomerRegistrationRequest {
@@ -140,7 +141,7 @@ export class StorefrontApiClient {
   private accessToken: string | null = null;
 
   constructor(baseUrl?: string) {
-    this.baseUrl = baseUrl || import.meta.env.VITE_API_BASE_URL || 'https://smartseller-api.preproduction.kirimku.com';
+    this.baseUrl = baseUrl || import.meta.env.VITE_API_BASE_URL || 'https://api-seller.kirimku.app';
   }
 
   /**
@@ -161,16 +162,16 @@ export class StorefrontApiClient {
    * Build storefront-specific endpoint URL
    */
   private buildStorefrontUrl(storefrontSlug: string, endpoint: string): string {
-    const cleanSlug = storefrontSlug.replace(/^\/+|\/+$/g, '');
+    const resolvedSlug = sanitizeSlug(storefrontSlug) || 'rexus';
     const cleanEndpoint = endpoint.replace(/^\/+/, '');
-    return `${this.baseUrl}/api/v1/storefront/${cleanSlug}/auth/${cleanEndpoint}`;
+    return `${this.baseUrl}/api/v1/storefront/${resolvedSlug}/auth/${cleanEndpoint}`;
   }
 
   // Add profile-specific URL builder for non-auth endpoints
   private buildProfileUrl(storefrontSlug: string, endpoint?: string): string {
-    const cleanSlug = storefrontSlug.replace(/^\/+|\/+$/g, '');
+    const resolvedSlug = sanitizeSlug(storefrontSlug) || 'rexus';
     const cleanEndpoint = endpoint ? `/${endpoint.replace(/^\/+/, '')}` : '';
-    return `${this.baseUrl}/api/v1/storefront/${cleanSlug}/profile${cleanEndpoint}`;
+    return `${this.baseUrl}/api/v1/storefront/${resolvedSlug}/profile${cleanEndpoint}`;
   }
 
   /**
@@ -186,7 +187,7 @@ export class StorefrontApiClient {
     const hasBody = options.body !== undefined && options.body !== null;
     let headers: Record<string, string> = {
       ...providedHeaders,
-      'X-Storefront-Slug': storefrontSlug,
+      'X-Storefront-Slug': sanitizeSlug(storefrontSlug) || 'rexus',
       ...(hasBody ? { 'Content-Type': providedHeaders['Content-Type'] || 'application/json' } : {}),
     };
 
@@ -274,9 +275,10 @@ export class StorefrontApiClient {
     const url = this.buildStorefrontUrl(storefrontSlug, 'register');
     
     // Get the actual API response structure
+    const safeData = sanitizePayload(data);
     const apiResponse = await this.makeRequest<ApiResponse<CustomerRegistrationApiResponse>>(url, storefrontSlug, {
       method: 'POST',
-      body: JSON.stringify(data),
+      body: JSON.stringify(safeData),
     });
 
     // Transform the API response to the expected CustomerAuthResponse format
@@ -314,9 +316,10 @@ export class StorefrontApiClient {
     const url = this.buildStorefrontUrl(storefrontSlug, 'login');
     
     // Get the actual API response structure
+    const safeCredentials = sanitizePayload(credentials);
     const apiResponse = await this.makeRequest<ApiResponse<CustomerLoginApiResponse>>(url, storefrontSlug, {
       method: 'POST',
-      body: JSON.stringify(credentials),
+      body: JSON.stringify(safeCredentials),
     });
 
     // Transform the API response to the expected CustomerAuthResponse format
@@ -358,15 +361,16 @@ export class StorefrontApiClient {
       // non-blocking debug
     }
 
+    const safeRefresh = sanitizeString(refreshToken) || refreshToken;
     return this.makeRequest<TokenRefreshResponse>(url, storefrontSlug, {
       method: 'POST',
       headers: {
         // Keep Authorization for backward compatibility with header-based servers
-        Authorization: `Bearer ${refreshToken}`,
+        Authorization: `Bearer ${safeRefresh}`,
         Accept: 'application/json',
       },
       // Send JSON payload for servers expecting body-based refresh contract
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      body: JSON.stringify({ refresh_token: safeRefresh }),
     });
   }
 
@@ -390,9 +394,10 @@ export class StorefrontApiClient {
   ): Promise<{ message: string }> {
     const url = this.buildStorefrontUrl(storefrontSlug, 'verify-email');
     
+    const safeToken = sanitizeString(token) || token;
     return this.makeRequest<{ message: string }>(url, storefrontSlug, {
       method: 'POST',
-      body: JSON.stringify({ token }),
+      body: JSON.stringify({ token: safeToken }),
     });
   }
 
@@ -405,9 +410,10 @@ export class StorefrontApiClient {
   ): Promise<{ message: string }> {
     const url = this.buildStorefrontUrl(storefrontSlug, 'resend-verification');
     
+    const safeEmail = sanitizeString(email) || email;
     return this.makeRequest<{ message: string }>(url, storefrontSlug, {
       method: 'POST',
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email: safeEmail }),
     });
   }
 
@@ -420,9 +426,10 @@ export class StorefrontApiClient {
   ): Promise<{ message: string }> {
     const url = this.buildStorefrontUrl(storefrontSlug, 'forgot-password');
     
+    const safeEmail = sanitizeString(email) || email;
     return this.makeRequest<{ message: string }>(url, storefrontSlug, {
       method: 'POST',
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email: safeEmail }),
     });
   }
 
@@ -436,9 +443,11 @@ export class StorefrontApiClient {
   ): Promise<{ message: string }> {
     const url = this.buildStorefrontUrl(storefrontSlug, 'reset-password');
     
+    const safeToken = sanitizeString(token) || token;
+    const safePassword = sanitizeString(newPassword) || newPassword;
     return this.makeRequest<{ message: string }>(url, storefrontSlug, {
       method: 'POST',
-      body: JSON.stringify({ token, new_password: newPassword }),
+      body: JSON.stringify({ token: safeToken, new_password: safePassword }),
     });
   }
 

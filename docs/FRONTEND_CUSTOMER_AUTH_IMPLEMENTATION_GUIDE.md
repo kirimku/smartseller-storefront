@@ -20,6 +20,7 @@ This document provides comprehensive guidance for implementing storefront custom
 ### Base URL Structure
 ```
 Base URL: http://localhost:8090 (development)
+Seller API: https://api-seller.kirimku.app
 Production: https://api.smartseller.com
 Storefront-specific: {BASE_URL}/api/v1/storefront/{storefront_slug}
 ```

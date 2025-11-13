@@ -18,7 +18,7 @@ class CsrfService {
   private getApiBaseUrl(): string {
     return (
       import.meta.env.VITE_API_BASE_URL ||
-      'https://smartseller-api.preproduction.kirimku.com'
+      'https://api-seller.kirimku.app'
     );
   }
 

@@ -5,7 +5,8 @@
 
 import { apiClient, ApiResponse, handleApiError } from '@/lib/api';
 import { TenantConfig, TenantApiResponse } from '@/types/tenant';
-import { tenantResolver, TenantResolutionInfo, TenantType } from './tenantResolver';
+import { tenantResolver, TenantResolutionInfo } from './tenantResolver';
+import { sanitizeSlug } from '@/lib/utils';
 import { slugDetectionService, SlugDetectionResult } from './slugDetectionService';
 
 export interface TenantUpdateRequest {
@@ -32,7 +33,6 @@ export interface TenantResolutionResponse {
   resolution: TenantResolutionInfo;
   slugDetection: SlugDetectionResult;
   apiUrl: string;
-  tenantType: TenantType;
 }
 
 export class TenantService {
@@ -41,7 +41,8 @@ export class TenantService {
    */
   private getStorefrontSlug(): string {
     try {
-      return tenantResolver.resolveTenant().slug || 'rexus';
+      const resolved = tenantResolver.resolveTenant().slug || 'rexus';
+      return sanitizeSlug(resolved) || 'rexus';
     } catch (error) {
       console.warn('Failed to resolve tenant, using default storefront slug');
       return 'rexus'; // Default fallback for development
@@ -75,15 +76,11 @@ export class TenantService {
       // Get API URL
       const apiUrl = tenantResolver.getTenantApiUrl(resolution.slug || identifier);
 
-      // Get tenant type
-      const tenantType = resolution.slug ? await tenantResolver.getTenantType(resolution.slug) : TenantType.SHARED;
-
       return {
         tenant,
         resolution,
         slugDetection,
         apiUrl,
-        tenantType,
       };
     } catch (error) {
       console.error('Failed to resolve tenant:', error);

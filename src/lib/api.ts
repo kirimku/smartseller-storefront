@@ -8,6 +8,7 @@ import { tokenRefreshInterceptor } from '@/services/tokenRefreshInterceptor';
 import { tenantAwareApiClient, TenantAwareRequestConfig } from './tenantAwareApiClient';
 import { tenantResolver } from '@/services/tenantResolver';
 import { secureTokenStorage } from '@/services/secureTokenStorage';
+import { sanitizeSlug } from '@/lib/utils';
 
 // API Configuration
 export const API_CONFIG = {
@@ -134,10 +135,13 @@ export class SmartSellerApiClient {
 
   // Get default headers
   private getDefaultHeaders(): Record<string, string> {
+    const resolution = tenantResolver.resolveTenant();
+    const resolved = resolution.slug || resolution.tenantId || (import.meta.env.DEV ? (import.meta.env.VITE_TENANT_SLUG || 'rexus') : '');
+    const dynamicSlug = sanitizeSlug(resolved) || (import.meta.env.DEV ? 'rexus' : '');
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
-      'X-Storefront-Slug': 'rexus',
+      ...(dynamicSlug ? { 'X-Storefront-Slug': dynamicSlug } : {}),
     };
 
     if (this.tenantId) {
@@ -186,6 +190,12 @@ export class SmartSellerApiClient {
     
     const url = `${baseUrl}${endpoint}`;
     const requestHeaders = { ...this.getDefaultHeaders(), ...headers };
+
+    // Debug storefront header usage
+    try {
+      const sfSlugPreview = requestHeaders['X-Storefront-Slug'];
+      console.debug('🔎 [ApiClient] Using X-Storefront-Slug:', sfSlugPreview);
+    } catch {/* noop */}
 
     // Add tenant-specific headers if using tenant-aware routing
     if (this.useTenantAwareRouting && tenantConfig) {

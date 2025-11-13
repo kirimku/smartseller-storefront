@@ -9,8 +9,9 @@
 import { Configuration } from '@/generated/api/configuration';
 import { AuthenticationApi } from '@/generated/api/apis/authentication-api';
 import { DefaultApi } from '@/generated/api/apis/default-api';
-import { tenantResolver, TenantType } from '@/services/tenantResolver';
+import { tenantResolver } from '@/services/tenantResolver';
 import { slugDetectionService } from '@/services/slugDetectionService';
+import { sanitizeSlug } from '@/lib/utils';
 
 
 export interface TenantAwareRequestConfig {
@@ -22,7 +23,6 @@ export interface TenantAwareRequestConfig {
 
 export interface TenantApiContext {
   tenantId: string | null;
-  tenantType: TenantType;
   apiBaseUrl: string;
   slug: string | null;
   isValid: boolean;
@@ -63,7 +63,6 @@ export class TenantAwareApiClient {
     if (!resolvedTenantId) {
       return {
         tenantId: null,
-        tenantType: TenantType.SHARED,
         apiBaseUrl: this.getDefaultApiUrl(),
         slug: null,
         isValid: false,
@@ -73,13 +72,11 @@ export class TenantAwareApiClient {
     try {
       // Get tenant resolution info
       const resolution = tenantResolver.resolveTenant();
-      const tenantType = await tenantResolver.getTenantType(resolvedTenantId);
       const apiBaseUrl = tenantResolver.getTenantApiUrl(resolvedTenantId);
       const isValid = await tenantResolver.validateTenantSlug(resolvedTenantId);
 
       return {
         tenantId: resolvedTenantId,
-        tenantType,
         apiBaseUrl,
         slug: resolution.slug,
         isValid,
@@ -88,7 +85,6 @@ export class TenantAwareApiClient {
       console.error('Failed to resolve tenant context:', error);
       return {
         tenantId: resolvedTenantId,
-        tenantType: TenantType.SHARED,
         apiBaseUrl: this.getDefaultApiUrl(),
         slug: resolvedTenantId,
         isValid: false,
@@ -100,7 +96,7 @@ export class TenantAwareApiClient {
    * Create tenant-specific configuration
    */
   private createTenantConfiguration(context: TenantApiContext): Configuration {
-    const cacheKey = `${context.tenantId}-${context.tenantType}-${context.apiBaseUrl}`;
+    const cacheKey = `${context.tenantId}-${context.apiBaseUrl}`;
     
     if (this.configurationCache.has(cacheKey)) {
       const cachedConfig = this.configurationCache.get(cacheKey)!;
@@ -111,16 +107,16 @@ export class TenantAwareApiClient {
       return cachedConfig;
     }
 
+    const safeSlug = sanitizeSlug(context.slug || 'rexus') || 'rexus';
+
     const config = new Configuration({
       basePath: context.apiBaseUrl,
       accessToken: this.accessToken || undefined,
       baseOptions: {
         headers: {
           'Content-Type': 'application/json',
-          'X-Storefront-Slug': 'rexus',
+          'X-Storefront-Slug': safeSlug,
           'X-Tenant-ID': context.tenantId || '',
-          'X-Tenant-Type': context.tenantType,
-          'X-Tenant-Slug': context.slug || '',
           ...(this.accessToken && { 'Authorization': `Bearer ${this.accessToken}` }),
         },
       },
@@ -134,7 +130,7 @@ export class TenantAwareApiClient {
    * Get default API URL for fallback scenarios
    */
   private getDefaultApiUrl(): string {
-    return import.meta.env.VITE_API_BASE_URL || 'https://smartseller-api.preproduction.kirimku.com';
+    return import.meta.env.VITE_API_BASE_URL || 'https://api-seller.kirimku.app';
   }
 
   /**

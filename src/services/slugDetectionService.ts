@@ -100,7 +100,7 @@ export class SlugDetectionService {
       pathPrefix: '/tenant/',
       
       queryParamNames: ['tenant', 'slug', 'store', 'storefront'],
-      headerNames: ['X-Tenant-Slug', 'X-Store-Slug'],
+      headerNames: ['X-Storefront-Slug'],
       cookieNames: ['tenant_slug', 'store_slug'],
       
       slugValidationPattern: /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/i,

@@ -1,6 +1,10 @@
 # Build stage
 FROM --platform=linux/amd64 node:20-alpine as build
 
+# Accept build arguments for API URL and tenant slug (seller defaults)
+ARG VITE_API_BASE_URL=https://api-seller.kirimku.app
+ARG VITE_TENANT_SLUG=rexus
+
 # Set working directory
 WORKDIR /app
 
@@ -13,22 +17,28 @@ RUN npm ci
 # Copy all files
 COPY . .
 
+# Ensure Vite picks up build-time env
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+ENV VITE_TENANT_SLUG=${VITE_TENANT_SLUG}
+
 # Build the application for production
-RUN npm run build:dev
+RUN npm run build:prod
 
 # Production stage
 FROM --platform=linux/amd64 node:20-alpine
 
 # Set environment variables
-ENV NODE_ENV=development
+ENV NODE_ENV=production
 ENV PORT=5173
+ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
+ENV VITE_TENANT_SLUG=${VITE_TENANT_SLUG}
 
 # Set working directory
 WORKDIR /app
 
-# Copy package files and install all dependencies (including dev dependencies for development mode)
+# Copy package files and install production dependencies only
 COPY package*.json ./
-RUN npm ci
+RUN npm ci --production
 
 # Copy built app from build stage
 COPY --from=build /app/dist ./dist

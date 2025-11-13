@@ -36,7 +36,7 @@ class TokenRefreshInterceptor {
 
   private constructor(config: Partial<InterceptorConfig> = {}) {
     this.config = {
-      baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000',
+      baseURL: import.meta.env.VITE_API_BASE_URL || 'https://api-seller.kirimku.app',
       maxRetries: 3,
       retryDelay: 1000,
       // Exclude auth endpoints from interception to avoid header overrides

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { TenantConfig } from '@/types/tenant';
-import { tenantResolver, TenantResolutionInfo, TenantType } from '@/services/tenantResolver';
+import { tenantResolver, TenantResolutionInfo } from '@/services/tenantResolver';
 import { slugDetectionService, SlugDetectionResult } from '@/services/slugDetectionService';
 
 interface TenantContextType {
@@ -13,7 +13,6 @@ interface TenantContextType {
   slug: string | null;
   tenantResolution: TenantResolutionInfo | null;
   slugDetection: SlugDetectionResult | null;
-  tenantType: TenantType;
   apiBaseUrl: string;
   // Backend compatibility methods
   refreshTenant: () => Promise<void>;
@@ -213,7 +212,6 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
   const [slug, setSlug] = useState<string | null>(null);
   const [tenantResolution, setTenantResolution] = useState<TenantResolutionInfo | null>(null);
   const [slugDetection, setSlugDetection] = useState<SlugDetectionResult | null>(null);
-  const [tenantType, setTenantType] = useState<TenantType>(TenantType.SHARED);
   const [apiBaseUrl, setApiBaseUrl] = useState<string>('');
 
 
@@ -307,10 +305,6 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
         setApiBaseUrl(resolution.apiBaseUrl);
         
         if (resolution.tenantId) {
-          // Get tenant type
-          const type = await tenantResolver.getTenantType(resolution.tenantId);
-          setTenantType(type);
-
           // Perform slug detection
           const slugResult = slugDetectionService.detectSlug();
           setSlugDetection(slugResult);
@@ -361,7 +355,6 @@ export const TenantProvider: React.FC<TenantProviderProps> = ({ children }) => {
     slug,
     tenantResolution,
     slugDetection,
-    tenantType,
     apiBaseUrl: apiBaseUrl || tenantResolver.getTenantApiUrl(slug || 'rexus'),
     refreshTenant,
     validateSlug,

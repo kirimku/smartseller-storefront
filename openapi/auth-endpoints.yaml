@@ -6,8 +6,8 @@ info:
 servers:
   - url: http://localhost:8080
     description: Local development server
-  - url: https://smartseller-api.preproduction.kirimku.com/api/v1
-    description: Preproduction API server
+  - url: https://api-seller.kirimku.app/api/v1
+    description: Seller API server
   - url: https://api-seller.kirimku.app/api/v1
     description: Seller API server
   - url: https://api.smartseller.com/api/v1

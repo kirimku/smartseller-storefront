@@ -227,6 +227,24 @@ components:
       description: |
         JWT Bearer token authentication. Include the token in the Authorization header:
         `Authorization: Bearer <token>`
+  parameters:
+    StorefrontSlugHeader:
+      name: X-Storefront-Slug
+      in: header
+      required: true
+      description: Storefront slug header used for multi-tenant routing
+      schema:
+        type: string
+        pattern: '^[a-z0-9-]+$'
+        minLength: 1
+        maxLength: 50
+      examples:
+        rexus:
+          summary: Rexus storefront
+          value: "rexus"
+        test-store:
+          summary: Test storefront
+          value: "test-store"
   
   # Import schemas from separate files
   schemas:

@@ -7,6 +7,7 @@
  */
 
 import { TenantConfig } from '@/types/tenant';
+import { sanitizeSlug } from '@/lib/utils';
 
 export interface TenantResolutionInfo {
   tenantId: string | null;
@@ -47,23 +48,11 @@ export interface TenantDatabaseResolver {
    * Get API base URL for a specific tenant
    */
   getTenantApiUrl(tenantId: string): string;
-  
-  /**
-   * Get tenant type for future migration compatibility
-   */
-  getTenantType(tenantId: string): Promise<TenantType>;
-}
-
-export enum TenantType {
-  SHARED = 'shared',      // Current: Row-level isolation
-  SCHEMA = 'schema',      // Future: Schema per tenant  
-  DATABASE = 'database'   // Future: Database per tenant
 }
 
 export class TenantResolver implements TenantDatabaseResolver {
   private config: TenantResolverConfig;
   private cache: Map<string, TenantConfig> = new Map();
-  private typeCache: Map<string, TenantType> = new Map();
 
   constructor(config: TenantResolverConfig) {
     this.config = config;
@@ -79,10 +68,10 @@ export class TenantResolver implements TenantDatabaseResolver {
     
     const isLocalhost = this.isLocalhostEnvironment(hostname);
     const domain = this.extractDomain(hostname);
-    // Prefer explicit tenant slug from environment when provided
+    // Detect slug from context first, then fall back to env/default
     const envSlug = (import.meta.env.VITE_TENANT_SLUG || '').trim() || null;
-    let tenantId: string | null = envSlug;
-    let slug: string | null = envSlug;
+    let tenantId: string | null = null;
+    let slug: string | null = null;
     let subdomain: string | null = null;
     let detectionMethod: TenantResolutionInfo['detectionMethod'] = 'none';
 
@@ -119,10 +108,17 @@ export class TenantResolver implements TenantDatabaseResolver {
     }
 
     // Method 4: Default tenant fallback
-    if (!tenantId && this.config.defaultTenant) {
-      tenantId = this.config.defaultTenant;
-      slug = this.config.defaultTenant;
-      detectionMethod = 'none'; // No detection method used, using default
+    if (!tenantId) {
+      // Prefer explicit env override next (e.g., CI or specific deployments)
+      if (envSlug) {
+        tenantId = envSlug;
+        slug = envSlug;
+        detectionMethod = 'none';
+      } else if (this.config.defaultTenant) {
+        tenantId = this.config.defaultTenant;
+        slug = this.config.defaultTenant;
+        detectionMethod = 'none'; // No detection method used, using default
+      }
     }
 
     return {
@@ -198,18 +194,25 @@ export class TenantResolver implements TenantDatabaseResolver {
       return mock;
     }
 
+    // Sanitize slug input to prevent injection and enforce policy
+    const safeSlug = sanitizeSlug(slug);
+    if (!safeSlug) {
+      console.warn(`Invalid tenant slug received: "${slug}"`);
+      return null;
+    }
+
     // Check cache first
-    if (this.cache.has(slug)) {
-      return this.cache.get(slug) || null;
+    if (this.cache.has(safeSlug)) {
+      return this.cache.get(safeSlug) || null;
     }
 
     try {
-      const apiUrl = this.getTenantApiUrl(slug);
-      const response = await fetch(`${apiUrl}/api/tenants/${slug}`, {
+      const apiUrl = this.getTenantApiUrl(safeSlug);
+      const response = await fetch(`${apiUrl}/api/tenants/${safeSlug}`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
-          'X-Tenant-Slug': slug, // Backend compatibility header
+          'X-Storefront-Slug': safeSlug,
         },
       });
 
@@ -225,7 +228,7 @@ export class TenantResolver implements TenantDatabaseResolver {
       if (data.success && data.data) {
         const tenantConfig = data.data as TenantConfig;
         // Cache the result
-        this.cache.set(slug, tenantConfig);
+        this.cache.set(safeSlug, tenantConfig);
         return tenantConfig;
       }
 
@@ -263,8 +266,8 @@ export class TenantResolver implements TenantDatabaseResolver {
     
     if (resolution.isLocalhost || this.config.developmentMode) {
       // Development mode - use env override when available
-      const envBase = import.meta.env.VITE_API_BASE_URL ?? 'https://smartseller-api.preproduction.kirimku.com';
-      console.log('🔍 [TenantResolver] Using development mode, envBase:', envBase);
+      const envBase = import.meta.env.VITE_API_BASE_URL ?? 'https://api-seller.kirimku.app';
+      console.log('🔍 [TenantResolver] Using development mode, envBase (seller API):', envBase);
       return envBase;
     }
 
@@ -291,53 +294,10 @@ export class TenantResolver implements TenantDatabaseResolver {
   }
 
   /**
-   * Get tenant type for future migration compatibility
-   */
-  async getTenantType(tenantId: string): Promise<TenantType> {
-    // Check cache first
-    if (this.typeCache.has(tenantId)) {
-      return this.typeCache.get(tenantId)!;
-    }
-
-    // In development, short-circuit to SHARED to avoid network errors
-    if (this.config.developmentMode) {
-      const devType = TenantType.SHARED;
-      this.typeCache.set(tenantId, devType);
-      return devType;
-    }
-
-    try {
-      const apiUrl = this.getTenantApiUrl(tenantId);
-      const response = await fetch(`${apiUrl}/api/tenants/${tenantId}/type`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Tenant-Slug': tenantId,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        const tenantType = data.type as TenantType || TenantType.SHARED;
-        this.typeCache.set(tenantId, tenantType);
-        return tenantType;
-      }
-    } catch (error) {
-      console.warn(`Failed to fetch tenant type for "${tenantId}":`, error);
-    }
-
-    // Default to shared for backward compatibility
-    const defaultType = TenantType.SHARED;
-    this.typeCache.set(tenantId, defaultType);
-    return defaultType;
-  }
-
-  /**
    * Clear caches (useful for testing or when tenant config changes)
    */
   clearCache(): void {
     this.cache.clear();
-    this.typeCache.clear();
   }
 
   /**
@@ -398,7 +358,7 @@ export class TenantResolver implements TenantDatabaseResolver {
     console.log('🔍 [TenantResolver] buildApiBaseUrl called with:', { tenantId, isLocalhost, developmentMode: this.config.developmentMode });
     
     if (isLocalhost || this.config.developmentMode) {
-      const envBase = import.meta.env.VITE_API_BASE_URL ?? 'https://smartseller-api.preproduction.kirimku.com';
+      const envBase = import.meta.env.VITE_API_BASE_URL ?? 'https://api-seller.kirimku.app';
       console.log('🔍 [TenantResolver] Using localhost/dev mode, envBase:', envBase);
       console.log('🔍 [TenantResolver] VITE_API_BASE_URL from env:', import.meta.env.VITE_API_BASE_URL);
       return envBase;
@@ -431,7 +391,7 @@ export class TenantResolver implements TenantDatabaseResolver {
  */
 export const defaultTenantResolverConfig: TenantResolverConfig = {
   defaultTenant: 'rexus', // Default for development
-  apiBaseDomain: 'smartseller-api.preproduction.kirimku.com',
+  apiBaseDomain: 'api-seller.kirimku.app',
   enablePathBasedRouting: false,
   enableQueryParamFallback: true,
   productionDomains: ['smartseller.com'],

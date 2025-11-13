@@ -6,22 +6,28 @@
 import { Configuration } from '@/generated/api/configuration';
 import { AuthenticationApi } from '@/generated/api/apis/authentication-api';
 import { DefaultApi } from '@/generated/api/apis/default-api';
+import axios, { AxiosError } from 'axios';
+import { sanitizeSlug } from '@/lib/utils';
 import type { 
   ApiV1AuthLoginPostRequest,
   ApiV1AuthLoginPost200Response,
   ApiV1AuthForgotPasswordPostRequest,
   ApiV1AuthResetPasswordPostRequest,
+  ApiV1AuthGoogleLoginGet200ResponseData,
   UserDTO
 } from '@/generated/api/models';
 
 // Base configuration for the API client
 const createApiConfiguration = (): Configuration => {
+  const resolution = (typeof window !== 'undefined') ? tenantResolver.resolveTenant() : { slug: null, tenantId: null };
+  const rawSlug = resolution.slug || resolution.tenantId || (import.meta.env.DEV ? (import.meta.env.VITE_TENANT_SLUG || 'rexus') : undefined);
+  const dynamicSlug = sanitizeSlug(rawSlug || null) || (import.meta.env.DEV ? 'rexus' : undefined);
   return new Configuration({
-    basePath: import.meta.env.VITE_API_BASE_URL || 'https://smartseller-api.preproduction.kirimku.com',
+    basePath: import.meta.env.VITE_API_BASE_URL || 'https://api-seller.kirimku.app',
     baseOptions: {
       headers: {
         'Content-Type': 'application/json',
-        'X-Storefront-Slug': 'rexus',
+        ...(dynamicSlug ? { 'X-Storefront-Slug': dynamicSlug } : {}),
       },
     },
   });
@@ -44,17 +50,24 @@ export class SmartSellerApiClient {
   }
 
   private getConfiguration(): Configuration {
-    return new Configuration({
-      basePath: import.meta.env.VITE_API_BASE_URL || 'https://smartseller-api.preproduction.kirimku.com',
+    const resolution = (typeof window !== 'undefined') ? tenantResolver.resolveTenant() : { slug: null, tenantId: null };
+    const rawSlug = resolution.slug || resolution.tenantId || (import.meta.env.DEV ? (import.meta.env.VITE_TENANT_SLUG || 'rexus') : undefined);
+    const dynamicSlug = sanitizeSlug(rawSlug || null) || (import.meta.env.DEV ? 'rexus' : undefined);
+    const config = new Configuration({
+      basePath: import.meta.env.VITE_API_BASE_URL || 'https://api-seller.kirimku.app',
       baseOptions: {
         withCredentials: true,
         headers: {
           'Content-Type': 'application/json',
-          'X-Storefront-Slug': 'rexus',
+          ...(dynamicSlug ? { 'X-Storefront-Slug': dynamicSlug } : {}),
           ...(this.accessToken && { 'Authorization': `Bearer ${this.accessToken}` }),
         },
       },
     });
+    try {
+      console.debug('🔎 [OpenAPI] Using X-Storefront-Slug:', dynamicSlug);
+    } catch {/* noop */}
+    return config;
   }
 
   // Update the access token and refresh API instances
@@ -92,7 +105,7 @@ export class SmartSellerApiClient {
   }
 
   // Google OAuth methods
-  public async getGoogleLoginUrl(): Promise<{ redirect_url: string; state: string }> {
+  public async getGoogleLoginUrl(): Promise<ApiV1AuthGoogleLoginGet200ResponseData> {
     try {
       const response = await this.defaultApi.apiV1AuthGoogleLoginGet();
       return response.data.data!;
@@ -121,18 +134,19 @@ export class SmartSellerApiClient {
 
   // Error handling
   private handleApiError(error: unknown): Error {
-    if (error.response) {
-      // Server responded with error status
-      const { status, data } = error.response;
-      const message = data?.message || `API Error: ${status}`;
+    if (axios.isAxiosError(error)) {
+      const axiosErr = error as AxiosError<any>;
+      const status = axiosErr.response?.status;
+      const data = axiosErr.response?.data as { message?: string } | undefined;
+      const message = data?.message || axiosErr.message || (status ? `API Error: ${status}` : 'API Error');
       return new Error(message);
-    } else if (error.request) {
-      // Network error
-      return new Error('Network error: Unable to connect to the server');
-    } else {
-      // Other error
-      return new Error(error.message || 'An unexpected error occurred');
     }
+
+    if (error instanceof Error) {
+      return new Error(error.message);
+    }
+
+    return new Error('An unexpected error occurred');
   }
 }
 
